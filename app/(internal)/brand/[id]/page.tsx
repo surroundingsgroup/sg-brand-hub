@@ -18,6 +18,7 @@ import { buildApprovalChecklist, isReadyToApprove } from "@/lib/brands/approval-
 import { PdfLinkField } from "@/components/brand/pdf-link-field";
 import { ShareLinkButton } from "@/components/brand/share-link-button";
 import { DeleteBrandButton } from "@/components/brand/delete-brand-button";
+import { RequestVideoAssetsButton } from "@/components/brand/request-video-assets-button";
 import { updateBrand, deleteLogo, reorderLogos } from "./actions";
 import { VERTICAL_LABELS, ENGAGEMENT_LABELS, type Brand, type BrandLogo, type BrandActivityLog } from "@/types/brand";
 import { formatRelativeDate } from "@/lib/utils";
@@ -101,6 +102,9 @@ export default async function BrandDetailPage({ params }: { params: { id: string
             </Link>
           </Button>
           <DeleteBrandButton brandId={b.id} brandName={b.business_name} />
+          {b.status === "approved" && (
+            <RequestVideoAssetsButton brandId={b.id} brandName={b.business_name} />
+          )}
           {b.status !== "approved" && (
             <ApproveButton brandId={b.id} disabled={!ready} disabledReason={blockedReason} />
           )}

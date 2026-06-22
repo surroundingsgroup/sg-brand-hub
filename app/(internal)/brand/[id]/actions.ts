@@ -456,6 +456,160 @@ export async function approveBrand(id: string) {
   return { ok: true as const, warnings: syncWarnings };
 }
 
+/**
+ * Request a NEW Video Assets project for an already-approved brand. Unlike
+ * approveBrand (which is idempotent and skips All Projects creation when the
+ * brand already has an item or is flagged "external"), this action ALWAYS
+ * creates a fresh parent item on the All Projects board with Project Type
+ * = Video Assets. The user's existing Monday automation then spawns the
+ * sub-items.
+ *
+ * Use when: a client has been approved + had their initial video assets
+ * delivered, and now we need a new round of assets (Q2 push, refresh, etc.).
+ *
+ * Side effects:
+ *   - Creates a new parent item on the All Projects board
+ *   - Posts an intro update with @editor mention + brand context
+ *   - Logs a `video_assets_requested` activity log row with the new item ID
+ *   - Does NOT update brand.monday_all_projects_item_id (preserves whatever
+ *     was there — typically "external" for imported brands, or the original
+ *     item ID for net-new ones)
+ */
+export async function requestVideoAssetsProject(id: string) {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const allProjectsBoardId = process.env.MONDAY_BOARD_ID_ALL_PROJECTS;
+  const defaultEditorId = process.env.MONDAY_DEFAULT_EDITOR_USER_ID;
+  if (!allProjectsBoardId || !process.env.MONDAY_API_TOKEN) {
+    return { ok: false as const, error: "Monday isn't configured on this deployment" };
+  }
+
+  const { data: brandRow, error: fetchErr } = await supabase
+    .from("brands")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !brandRow) {
+    return { ok: false as const, error: fetchErr?.message ?? "Brand not found" };
+  }
+  const b = brandRow as Brand;
+  if (b.status !== "approved") {
+    return {
+      ok: false as const,
+      error: "Brand must be approved before requesting new video assets.",
+    };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const shareUrl = `${appUrl}/share/${b.share_token}`;
+
+  // Look up the AM so we can populate the AM/BD person column + contact
+  // info on the new All Projects item. Falls back gracefully if no AM set
+  // or the name doesn't match a Monday user.
+  let amUser: { id: string; name: string; email: string | null; phone: string | null } | null = null;
+  if (b.account_manager?.trim()) {
+    try {
+      amUser = await findUserByName(b.account_manager);
+    } catch {
+      // Don't fail the whole request just because AM lookup hiccupped.
+    }
+  }
+
+  const columnValues: Record<string, unknown> = {
+    [ALL_PROJECTS_PROJECT_TYPE_COLUMN]: { index: PROJECT_TYPE_VIDEO_ASSETS_INDEX },
+    [ALL_PROJECTS_COLUMNS.client]: { labels: [b.business_name] },
+  };
+  if (amUser) {
+    columnValues[ALL_PROJECTS_COLUMNS.amBd] = {
+      personsAndTeams: [{ id: Number(amUser.id), kind: "person" }],
+    };
+    columnValues[ALL_PROJECTS_COLUMNS.primaryName] = amUser.name;
+    if (amUser.email) columnValues[ALL_PROJECTS_COLUMNS.primaryEmail] = amUser.email;
+    if (amUser.phone) columnValues[ALL_PROJECTS_COLUMNS.primaryPhone] = amUser.phone;
+  }
+  if (b.dropbox_folder_url) {
+    columnValues[ALL_PROJECTS_COLUMNS.dbParentFolder] = {
+      url: b.dropbox_folder_url,
+      text: "Dropbox folder",
+    };
+  }
+
+  // Suffix the item name with the year + a short sequence so repeat requests
+  // are visually distinct on Monday ("Bertram | Video Assets 2026", then
+  // "Bertram | Video Assets 2026 #2" if requested again the same year).
+  const year = new Date().getUTCFullYear();
+  const baseName = `${b.business_name} | Video Assets ${year}`;
+  const { data: priorRequests } = await supabase
+    .from("brand_activity_log")
+    .select("created_at")
+    .eq("brand_id", id)
+    .eq("event_type", "video_assets_requested")
+    .gte("created_at", `${year}-01-01`)
+    .lt("created_at", `${year + 1}-01-01`);
+  const sequenceSuffix =
+    priorRequests && priorRequests.length > 0 ? ` #${priorRequests.length + 1}` : "";
+  const itemName = `${baseName}${sequenceSuffix}`;
+
+  let mondayItemId: string;
+  let mondayItemUrl: string;
+  try {
+    const parent = await createAllProjectsParent({
+      boardId: allProjectsBoardId,
+      itemName,
+      groupId: ALL_PROJECTS_INTAKE_GROUP_ID,
+      columnValues,
+    });
+    mondayItemId = parent.id;
+    mondayItemUrl = `${MONDAY_BOARD_BASE_URL}/boards/${allProjectsBoardId}/pulses/${parent.id}`;
+  } catch (e) {
+    alertError({
+      flow: "request_video_assets.create_item",
+      brandId: id,
+      brandName: b.business_name,
+      error: e,
+    });
+    return {
+      ok: false as const,
+      error: `Couldn't create the Monday item: ${(e as Error).message}`,
+    };
+  }
+
+  // Best-effort intro update — failure here doesn't undo the item creation.
+  try {
+    const description = buildSubitemDescription({
+      brandName: b.business_name,
+      shareUrl,
+      pdfUrl: b.brand_guideline_pdf_url,
+      dropboxUrl: b.dropbox_folder_url,
+    });
+    const tag = defaultEditorId ? `Hi ${mention(defaultEditorId, DEFAULT_EDITOR_NAME)} — ` : "";
+    await postUpdate({
+      itemId: mondayItemId,
+      body: `${tag}New round of video assets requested for ${b.business_name}.\n\n${description}`,
+    });
+  } catch (e) {
+    // Log but don't fail — the item exists, the editor can manually @mention.
+    console.error(`[request_video_assets] post update failed: ${(e as Error).message}`);
+  }
+
+  await supabase.from("brand_activity_log").insert({
+    brand_id: id,
+    event_type: "video_assets_requested",
+    user_id: user?.id,
+    metadata: {
+      monday_item_id: mondayItemId,
+      monday_item_url: mondayItemUrl,
+      item_name: itemName,
+    },
+  });
+
+  revalidatePath(`/brand/${id}`);
+  return { ok: true as const, mondayItemUrl, itemName };
+}
+
 export async function deleteBrand(id: string) {
   const supabase = createSupabaseServerClient();
 

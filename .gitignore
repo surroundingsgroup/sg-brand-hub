@@ -43,3 +43,6 @@ scripts/monday-assets.json
 # one-off operation backups (kept locally if you want them)
 scripts/dedupe-backup-*.json
 scripts/manual-merge-backup-*.json
+
+# Local dev config for Claude Code preview server
+.claude/
