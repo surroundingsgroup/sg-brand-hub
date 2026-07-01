@@ -1,5 +1,6 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { Trash2, UploadCloud, FileText, GripVertical, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { insertLogoRow } from "@/app/(internal)/brand/[id]/actions";
 import type { BrandLogo } from "@/types/brand";
 
 type Props = {
@@ -35,41 +37,70 @@ function isImage(name: string) {
 }
 
 export function LogosEditor({ brandId, initial, onDelete, onReorder }: Props) {
+  const router = useRouter();
   const [logos, setLogos] = useState<BrandLogo[]>(initial);
   const [uploading, setUploading] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  // Sync when the parent re-fetches (e.g. after router.refresh()). Without
+  // this, useState only reads `initial` on mount and later server updates
+  // would be invisible in the UI — the exact "logos disappeared after tab
+  // switch" bug we were seeing.
+  useEffect(() => {
+    setLogos(initial);
+  }, [initial]);
 
   const onDrop = async (files: File[]) => {
     setUploading(true);
     const supabase = createSupabaseBrowserClient();
     const created: BrandLogo[] = [];
+    let anyFailed = false;
     for (const file of files) {
+      // Path lives under the brand id so the RLS check `split_part(name, '/', 1)`
+      // still matches on the intake bucket policy.
       const path = `${brandId}/${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
       const { error: upErr } = await supabase.storage.from("brand-logos").upload(path, file);
       if (upErr) {
-        toast.error(`Upload failed: ${upErr.message}`);
+        anyFailed = true;
+        toast.error(`Upload failed for ${file.name}: ${upErr.message}`, { duration: 10000 });
         continue;
       }
       const { data: pub } = supabase.storage.from("brand-logos").getPublicUrl(path);
-      const { data, error } = await supabase
-        .from("brand_logos")
-        .insert({
-          brand_id: brandId,
-          file_name: file.name,
-          file_path: path,
-          public_url: pub.publicUrl,
-          display_order: logos.length + created.length,
-        })
-        .select("*")
-        .single();
-      if (error || !data) {
-        toast.error(`Save failed: ${error?.message ?? "unknown"}`);
+      // DB insert now goes through a server action so the row is written under
+      // the authenticated user's session cookie — bypasses the browser-client
+      // RLS ambiguity that was letting inserts silently fail before.
+      const res = await insertLogoRow({
+        brandId,
+        filePath: path,
+        publicUrl: pub.publicUrl,
+        fileName: file.name,
+      });
+      if (!res.ok) {
+        anyFailed = true;
+        toast.error(`Couldn't save ${file.name}: ${res.error}`, { duration: 10000 });
         continue;
       }
-      created.push(data as BrandLogo);
+      created.push(res.logo as BrandLogo);
     }
     setLogos((prev) => [...prev, ...created]);
     setUploading(false);
+    if (created.length > 0) {
+      toast.success(
+        created.length === 1
+          ? `Uploaded ${created[0].file_name}`
+          : `Uploaded ${created.length} logos`
+      );
+      // Re-fetch server data so the approval checklist ticks off "image
+      // logo uploaded" without needing a manual page reload.
+      router.refresh();
+    }
+    if (anyFailed && created.length === 0) {
+      // Explicit "nothing landed" signal so the user doesn't retry blindly.
+      toast.error(
+        "No logos were saved. Check your connection and try again — if this keeps happening, let Billy know.",
+        { duration: 12000 }
+      );
+    }
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

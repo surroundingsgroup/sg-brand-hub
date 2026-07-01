@@ -159,6 +159,53 @@ export async function updateBrand(id: string, patch: BrandPatch) {
   return { ok: true as const };
 }
 
+/**
+ * Insert a brand_logos row after the file has been uploaded to Storage
+ * client-side. Kept as a server action (not a browser-client insert) so:
+ *   • The row is written under the authenticated user's session cookie — no
+ *     RLS-vs-anon-key ambiguity from the browser client.
+ *   • Errors surface as return values instead of getting eaten by a toast.
+ *   • The caller can revalidate paths to update the approval checklist +
+ *     the dashboard's "last edited" timestamp.
+ *
+ * The Storage upload still runs client-side (files can't easily flow through
+ * server actions), but the row write moves here.
+ */
+export async function insertLogoRow(input: {
+  brandId: string;
+  filePath: string;
+  publicUrl: string;
+  fileName: string;
+}) {
+  const supabase = createSupabaseServerClient();
+  const { data: existing } = await supabase
+    .from("brand_logos")
+    .select("id")
+    .eq("brand_id", input.brandId);
+  const nextOrder = existing?.length ?? 0;
+
+  const { data, error } = await supabase
+    .from("brand_logos")
+    .insert({
+      brand_id: input.brandId,
+      file_name: input.fileName,
+      file_path: input.filePath,
+      public_url: input.publicUrl,
+      display_order: nextOrder,
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return { ok: false as const, error: error?.message ?? "Insert returned no row" };
+  }
+
+  revalidatePath(`/brand/${input.brandId}`);
+  revalidatePath("/dashboard");
+
+  return { ok: true as const, logo: data };
+}
+
 export async function deleteLogo(brandId: string, logoId: string, filePath: string) {
   const supabase = createSupabaseServerClient();
   await supabase.storage.from("brand-logos").remove([filePath]);
