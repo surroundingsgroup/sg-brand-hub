@@ -522,7 +522,17 @@ export async function approveBrand(id: string) {
  *     was there — typically "external" for imported brands, or the original
  *     item ID for net-new ones)
  */
-export async function requestVideoAssetsProject(id: string) {
+export type VideoAssetsRequestInput = {
+  /** Free-text brief — goal, deliverables, deadlines, notes. Optional. */
+  brief?: string;
+  /** Style direction + reference links / example URLs. Optional. */
+  styleNotes?: string;
+};
+
+export async function requestVideoAssetsProject(
+  id: string,
+  input: VideoAssetsRequestInput = {}
+) {
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
@@ -624,6 +634,12 @@ export async function requestVideoAssetsProject(id: string) {
     };
   }
 
+  // Compose the intro update body. If the caller supplied a brief or style
+  // notes, prepend them with clear headings so the editor sees the AM's
+  // direction before the standard brand context block.
+  const brief = input.brief?.trim();
+  const styleNotes = input.styleNotes?.trim();
+
   // Best-effort intro update — failure here doesn't undo the item creation.
   try {
     const description = buildSubitemDescription({
@@ -633,9 +649,15 @@ export async function requestVideoAssetsProject(id: string) {
       dropboxUrl: b.dropbox_folder_url,
     });
     const tag = defaultEditorId ? `Hi ${mention(defaultEditorId, DEFAULT_EDITOR_NAME)} — ` : "";
+
+    // Monday's create_update body renders newlines as line breaks. HTML tags
+    // like <b> also work for basic formatting.
+    const briefSection = brief ? `\n\n<b>📌 Brief</b>\n${brief}` : "";
+    const styleSection = styleNotes ? `\n\n<b>🎨 Style & references</b>\n${styleNotes}` : "";
+
     await postUpdate({
       itemId: mondayItemId,
-      body: `${tag}New round of video assets requested for ${b.business_name}.\n\n${description}`,
+      body: `${tag}New round of video assets requested for ${b.business_name}.${briefSection}${styleSection}\n\n${description}`,
     });
   } catch (e) {
     // Log but don't fail — the item exists, the editor can manually @mention.
@@ -650,6 +672,8 @@ export async function requestVideoAssetsProject(id: string) {
       monday_item_id: mondayItemId,
       monday_item_url: mondayItemUrl,
       item_name: itemName,
+      brief: brief || null,
+      style_notes: styleNotes || null,
     },
   });
 
