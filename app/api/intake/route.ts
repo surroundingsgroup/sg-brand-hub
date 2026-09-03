@@ -55,12 +55,43 @@ export async function POST(request: Request) {
     : null;
 
   const supabase = createSupabaseAdminClient();
+
+  // Duplicate detection — a client submitting the public form can't be asked,
+  // so the submission always goes through, but if the business name looks like
+  // an existing brand (exact ignoring case/punctuation, or a short/long variant
+  // where every word of one name appears in the other, e.g. "FIM" vs
+  // "FIM Yachts - Fabbrica Italiana Motoscafi"), flag it in internal_notes so
+  // the AM sees it during review and merges instead of approving a second row.
+  let dupeNote: string | null = null;
+  try {
+    const tokens = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const norm = (s: string) => tokens(s).join("");
+    const { data: existingBrands } = await supabase
+      .from("brands")
+      .select("business_name");
+    const match = (existingBrands ?? []).find((b) => {
+      const a = b.business_name as string;
+      if (!a) return false;
+      if (norm(a) === norm(v.business_name)) return true;
+      const ta = tokens(a), tb = tokens(v.business_name);
+      if (!ta.length || !tb.length) return false;
+      const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+      return small.every((t) => big.includes(t));
+    });
+    if (match) {
+      dupeNote = `⚠️ POSSIBLE DUPLICATE: a brand named "${match.business_name}" already exists. Review and merge instead of approving a second record.`;
+    }
+  } catch {
+    // best-effort — never block an intake submission on the dupe check
+  }
+
   const { data, error } = await supabase
     .from("brands")
     .insert({
       submitter_name: v.submitter_name,
       submitter_email: v.submitter_email,
       submitter_phone: v.submitter_phone || null,
+      ...(dupeNote ? { internal_notes: dupeNote } : {}),
 
       business_name: v.business_name,
       website: v.website || null,
