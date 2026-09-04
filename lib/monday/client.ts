@@ -288,15 +288,59 @@ export function buildIntakeColumnValues(brand: {
 // ---------- Subitem template ----------
 
 /**
- * The 4 baseline video asset subitems Rendi gets when a brand is approved.
- * Names match the spec; AM can rename in Monday after creation.
+ * The 7 standard sub-items every Video Assets project gets. These match
+ * the pattern observed on working items on the All Projects board (Wylden,
+ * Moore Yacht Sales, Nautical Studios, etc.).
+ *
+ * Historically, a Monday automation ("when Trigger Subitems changes to
+ * Done → copy sub-items from a per-client Creative Assets Kit template")
+ * spawned these. That automation is unreliable for new clients — it
+ * requires a pre-existing per-client kit item, so brands like Vollmer end
+ * up with a bare parent item and zero sub-items.
+ *
+ * We now create these ourselves after the parent lands. Deterministic,
+ * no per-client Monday setup required.
  */
-export const BASE_VIDEO_SUBITEMS = [
-  "Social Vertical Intro & Outro",
-  "Horizontal Intro & Outro",
-  "Social Vertical Lower Thirds",
-  "Horizontal Lower Thirds",
+export const VIDEO_ASSETS_SUBITEMS = [
+  "Project Setup",
+  "Social Media Reel End Card #1",
+  "Social Media Reel End Card #2",
+  "Client Lower Third Title 16x9 Format",
+  "Client Lower Third Title 9x16 Format",
+  "Main Video End Card #1",
+  "Main Video End Card #2",
 ] as const;
+
+/**
+ * Create the 7 standard Video Assets sub-items under a parent item.
+ * Fires them in parallel — Monday accepts concurrent create_subitem calls
+ * against the same parent. Returns the created IDs in name order.
+ *
+ * Best-effort: individual failures are logged but don't block the others.
+ */
+export async function createVideoAssetsSubitems(
+  parentItemId: string
+): Promise<{ created: number; failed: number; ids: string[] }> {
+  const results = await Promise.allSettled(
+    VIDEO_ASSETS_SUBITEMS.map((name) =>
+      createSubitem({ parentItemId, itemName: name })
+    )
+  );
+  const ids: string[] = [];
+  let failed = 0;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (r.status === "fulfilled") {
+      ids.push(r.value.id);
+    } else {
+      failed++;
+      console.error(
+        `[createVideoAssetsSubitems] "${VIDEO_ASSETS_SUBITEMS[i]}" failed on parent ${parentItemId}: ${r.reason?.message ?? r.reason}`
+      );
+    }
+  }
+  return { created: ids.length, failed, ids };
+}
 
 export function buildSubitemDescription(opts: {
   brandName: string;

@@ -8,6 +8,7 @@ import {
   updateIntakeColumns,
   createAllProjectsParent,
   updateAllProjectsColumns,
+  createVideoAssetsSubitems,
   postUpdate,
   buildIntakeColumnValues,
   buildSubitemDescription,
@@ -439,9 +440,10 @@ export async function approveBrand(id: string) {
         columnValues,
       });
 
-      // Set Project Type in a separate mutation to trigger the sub-item
-      // automation. Falls under the same syncWarnings umbrella so a hiccup
-      // shows up in the toast rather than silently orphaning the item.
+      // Set Project Type in a separate mutation so any "when column
+      // changes" automations get a chance to fire. Falls under the same
+      // syncWarnings umbrella so a hiccup surfaces in the toast rather
+      // than silently.
       try {
         await updateAllProjectsColumns({
           boardId: allProjectsBoardId,
@@ -452,8 +454,21 @@ export async function approveBrand(id: string) {
         });
       } catch (projTypeErr) {
         syncWarnings.push(
-          `Set Project Type on All Projects failed (sub-items won't auto-spawn): ${(projTypeErr as Error).message}`
+          `Set Project Type on All Projects failed: ${(projTypeErr as Error).message}`
         );
+      }
+
+      // Create the 7 standard Video Assets sub-items ourselves rather than
+      // relying on Monday's per-client automation.
+      try {
+        const subResult = await createVideoAssetsSubitems(parent.id);
+        if (subResult.failed > 0) {
+          syncWarnings.push(
+            `${subResult.failed} of ${subResult.created + subResult.failed} sub-items failed to create`
+          );
+        }
+      } catch (subErr) {
+        syncWarnings.push(`Sub-item creation failed: ${(subErr as Error).message}`);
       }
 
       // Post an update on the parent tagging Rendi with the project details.
@@ -653,9 +668,9 @@ export async function requestVideoAssetsProject(
     mondayItemId = parent.id;
     mondayItemUrl = `${MONDAY_BOARD_BASE_URL}/boards/${allProjectsBoardId}/pulses/${parent.id}`;
 
-    // Now set Project Type in a separate mutation so the sub-item automation
-    // actually fires. If this fails, the item still exists — the editor can
-    // set the column manually to trigger the automation.
+    // Now set Project Type in a separate mutation so any "when column
+    // changes" automations that depend on it get a chance to fire. If this
+    // fails, the item still exists — the editor can set the column manually.
     try {
       await updateAllProjectsColumns({
         boardId: allProjectsBoardId,
@@ -667,6 +682,23 @@ export async function requestVideoAssetsProject(
     } catch (projTypeErr) {
       console.error(
         `[request_video_assets] setting Project Type failed on ${mondayItemId}: ${(projTypeErr as Error).message}`
+      );
+    }
+
+    // Create the 7 standard Video Assets sub-items ourselves rather than
+    // relying on Monday's per-client automation (which requires a
+    // pre-existing Creative Assets Kit template item per client — a fragile
+    // setup that leaves new brands like Vollmer with no sub-items).
+    try {
+      const subResult = await createVideoAssetsSubitems(mondayItemId);
+      if (subResult.failed > 0) {
+        console.error(
+          `[request_video_assets] ${subResult.failed} of ${subResult.created + subResult.failed} sub-items failed on ${mondayItemId}`
+        );
+      }
+    } catch (subErr) {
+      console.error(
+        `[request_video_assets] createVideoAssetsSubitems threw on ${mondayItemId}: ${(subErr as Error).message}`
       );
     }
   } catch (e) {
