@@ -404,8 +404,13 @@ export async function approveBrand(id: string) {
         }
       }
 
+      // IMPORTANT: Project Type deliberately NOT set at item creation.
+      // Monday's "when Project Type changes → create sub-items" automation
+      // treats create_item column values as "created with" not "changed to,"
+      // so it stays silent and we end up with a bare parent. We create the
+      // item without Project Type, then flip it in a separate mutation
+      // below to actually fire the automation.
       const columnValues: Record<string, unknown> = {
-        [ALL_PROJECTS_PROJECT_TYPE_COLUMN]: { index: PROJECT_TYPE_VIDEO_ASSETS_INDEX },
         // Client dropdown — Monday will reuse an existing label of this name
         // or create one if it doesn't exist (create_labels_if_missing: true).
         [ALL_PROJECTS_COLUMNS.client]: { labels: [b.business_name] },
@@ -433,6 +438,23 @@ export async function approveBrand(id: string) {
         groupId: ALL_PROJECTS_INTAKE_GROUP_ID,
         columnValues,
       });
+
+      // Set Project Type in a separate mutation to trigger the sub-item
+      // automation. Falls under the same syncWarnings umbrella so a hiccup
+      // shows up in the toast rather than silently orphaning the item.
+      try {
+        await updateAllProjectsColumns({
+          boardId: allProjectsBoardId,
+          itemId: parent.id,
+          columnValues: {
+            [ALL_PROJECTS_PROJECT_TYPE_COLUMN]: { index: PROJECT_TYPE_VIDEO_ASSETS_INDEX },
+          },
+        });
+      } catch (projTypeErr) {
+        syncWarnings.push(
+          `Set Project Type on All Projects failed (sub-items won't auto-spawn): ${(projTypeErr as Error).message}`
+        );
+      }
 
       // Post an update on the parent tagging Rendi with the project details.
       const description = buildSubitemDescription({
@@ -575,8 +597,17 @@ export async function requestVideoAssetsProject(
     }
   }
 
+  // IMPORTANT: Project Type is deliberately NOT set at item creation.
+  // Monday's "when Project Type changes to Video Assets → create sub-items"
+  // automation only fires on an actual column value CHANGE — setting the
+  // value inside the initial create_item mutation is treated as "created
+  // with that value," not as a change, so the sub-item automation stays
+  // silent and the AM ends up with a bare parent item.
+  //
+  // We create the item without Project Type first, then flip it in a
+  // separate change_multiple_column_values mutation below to actually fire
+  // the automation.
   const columnValues: Record<string, unknown> = {
-    [ALL_PROJECTS_PROJECT_TYPE_COLUMN]: { index: PROJECT_TYPE_VIDEO_ASSETS_INDEX },
     [ALL_PROJECTS_COLUMNS.client]: { labels: [b.business_name] },
   };
   if (amUser) {
@@ -621,6 +652,23 @@ export async function requestVideoAssetsProject(
     });
     mondayItemId = parent.id;
     mondayItemUrl = `${MONDAY_BOARD_BASE_URL}/boards/${allProjectsBoardId}/pulses/${parent.id}`;
+
+    // Now set Project Type in a separate mutation so the sub-item automation
+    // actually fires. If this fails, the item still exists — the editor can
+    // set the column manually to trigger the automation.
+    try {
+      await updateAllProjectsColumns({
+        boardId: allProjectsBoardId,
+        itemId: mondayItemId,
+        columnValues: {
+          [ALL_PROJECTS_PROJECT_TYPE_COLUMN]: { index: PROJECT_TYPE_VIDEO_ASSETS_INDEX },
+        },
+      });
+    } catch (projTypeErr) {
+      console.error(
+        `[request_video_assets] setting Project Type failed on ${mondayItemId}: ${(projTypeErr as Error).message}`
+      );
+    }
   } catch (e) {
     alertError({
       flow: "request_video_assets.create_item",
