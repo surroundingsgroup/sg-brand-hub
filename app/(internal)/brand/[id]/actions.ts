@@ -348,160 +348,19 @@ export async function approveBrand(id: string) {
     }
   }
 
-  // 4) Monday — All Projects: create parent item in the Project Intake group
-  //    with Project Type set to "Video Assets". Subitems are intentionally NOT
-  //    created here — the user has their own Monday automation that fires when
-  //    Project Type = Video Assets to spawn the subitems.
+  // Note: Approve used to also create an All Projects parent item named
+  // "{Brand} | Video Assets" (no year) with 7 sub-items. That was removed
+  // because the "Request video assets" button on the brand editor already
+  // handles kicking off a video assets project — item name "{Brand} |
+  // Video Assets {Year}" plus a sequence suffix on repeats. Approving a
+  // brand no longer presumes a video assets project is wanted; the AM
+  // clicks Request Video Assets explicitly when they're ready to kick
+  // off work (matches the onboarding SOP: approve = brand ready, request
+  // = project ready).
   //
-  //    Idempotent behaviour:
-  //    - monday_all_projects_item_id null → create + populate columns
-  //    - monday_all_projects_item_id "external" → skip (imported brands have
-  //      their own pre-existing items not tracked by ID)
-  //    - monday_all_projects_item_id is a real ID → back-fill the DB Parent
-  //      Folder column if we now have a Dropbox URL but didn't when the item
-  //      was created. Leaves all other columns untouched to avoid overwriting
-  //      manual edits.
-  if (
-    b.monday_all_projects_item_id &&
-    b.monday_all_projects_item_id !== "external" &&
-    effectiveDropboxUrl &&
-    allProjectsBoardId &&
-    process.env.MONDAY_API_TOKEN
-  ) {
-    try {
-      await updateAllProjectsColumns({
-        boardId: allProjectsBoardId,
-        itemId: b.monday_all_projects_item_id,
-        columnValues: {
-          [ALL_PROJECTS_COLUMNS.dbParentFolder]: {
-            url: effectiveDropboxUrl,
-            text: "Dropbox folder",
-          },
-        },
-      });
-    } catch (e) {
-      syncWarnings.push(
-        `Couldn't back-fill DB Parent Folder on All Projects: ${(e as Error).message}`
-      );
-    }
-  }
-
-  if (
-    !b.monday_all_projects_item_id &&
-    allProjectsBoardId &&
-    process.env.MONDAY_API_TOKEN
-  ) {
-    try {
-      // Look up the AM by name so we can assign the AM/BD person column
-      // and pre-fill primary contact info from their Monday profile.
-      let amUser: { id: string; name: string; email: string | null; phone: string | null } | null = null;
-      if (b.account_manager?.trim()) {
-        try {
-          amUser = await findUserByName(b.account_manager);
-        } catch (amErr) {
-          syncWarnings.push(
-            `Couldn't look up AM "${b.account_manager}": ${(amErr as Error).message}`
-          );
-        }
-      }
-
-      // IMPORTANT: Project Type deliberately NOT set at item creation.
-      // Monday's "when Project Type changes → create sub-items" automation
-      // treats create_item column values as "created with" not "changed to,"
-      // so it stays silent and we end up with a bare parent. We create the
-      // item without Project Type, then flip it in a separate mutation
-      // below to actually fire the automation.
-      const columnValues: Record<string, unknown> = {
-        // Client dropdown — Monday will reuse an existing label of this name
-        // or create one if it doesn't exist (create_labels_if_missing: true).
-        [ALL_PROJECTS_COLUMNS.client]: { labels: [b.business_name] },
-      };
-
-      if (amUser) {
-        columnValues[ALL_PROJECTS_COLUMNS.amBd] = {
-          personsAndTeams: [{ id: Number(amUser.id), kind: "person" }],
-        };
-        columnValues[ALL_PROJECTS_COLUMNS.primaryName] = amUser.name;
-        if (amUser.email) columnValues[ALL_PROJECTS_COLUMNS.primaryEmail] = amUser.email;
-        if (amUser.phone) columnValues[ALL_PROJECTS_COLUMNS.primaryPhone] = amUser.phone;
-      }
-
-      if (effectiveDropboxUrl) {
-        columnValues[ALL_PROJECTS_COLUMNS.dbParentFolder] = {
-          url: effectiveDropboxUrl,
-          text: "Dropbox folder",
-        };
-      }
-
-      const parent = await createAllProjectsParent({
-        boardId: allProjectsBoardId,
-        itemName: `${b.business_name} | Video Assets`,
-        groupId: ALL_PROJECTS_INTAKE_GROUP_ID,
-        columnValues,
-      });
-
-      // Set Project Type in a separate mutation so any "when column
-      // changes" automations get a chance to fire. Falls under the same
-      // syncWarnings umbrella so a hiccup surfaces in the toast rather
-      // than silently.
-      try {
-        await updateAllProjectsColumns({
-          boardId: allProjectsBoardId,
-          itemId: parent.id,
-          columnValues: {
-            [ALL_PROJECTS_PROJECT_TYPE_COLUMN]: { index: PROJECT_TYPE_VIDEO_ASSETS_INDEX },
-          },
-        });
-      } catch (projTypeErr) {
-        syncWarnings.push(
-          `Set Project Type on All Projects failed: ${(projTypeErr as Error).message}`
-        );
-      }
-
-      // Create the 7 standard Video Assets sub-items ourselves rather than
-      // relying on Monday's per-client automation.
-      try {
-        const subResult = await createVideoAssetsSubitems(parent.id);
-        if (subResult.failed > 0) {
-          syncWarnings.push(
-            `${subResult.failed} of ${subResult.created + subResult.failed} sub-items failed to create`
-          );
-        }
-      } catch (subErr) {
-        syncWarnings.push(`Sub-item creation failed: ${(subErr as Error).message}`);
-      }
-
-      // Post an update on the parent tagging Rendi with the project details.
-      const description = buildSubitemDescription({
-        brandName: b.business_name,
-        shareUrl,
-        pdfUrl: b.brand_guideline_pdf_url,
-        dropboxUrl: effectiveDropboxUrl,
-      });
-      const tag = defaultEditorId ? `Hi ${mention(defaultEditorId, DEFAULT_EDITOR_NAME)} — ` : "";
-      try {
-        await postUpdate({
-          itemId: parent.id,
-          body: `${tag}Brand approved and ready to start video assets.\n\n${description}`,
-        });
-      } catch (updateErr) {
-        syncWarnings.push(`Couldn't post update: ${(updateErr as Error).message}`);
-      }
-
-      // Derive the canonical Monday URL for the new parent item so the
-      // editor's "Monday client board" field auto-fills.
-      const clientBoardUrl = `${MONDAY_BOARD_BASE_URL}/boards/${allProjectsBoardId}/pulses/${parent.id}`;
-      await supabase
-        .from("brands")
-        .update({
-          monday_all_projects_item_id: parent.id,
-          client_monday_board_url: clientBoardUrl,
-        })
-        .eq("id", id);
-    } catch (e) {
-      syncWarnings.push(`All Projects sync failed: ${(e as Error).message}`);
-    }
-  }
+  // The Intake board sync above still runs — that's about keeping brand
+  // metadata (PDF URL, Dropbox folder, overview, colors, fonts, audience)
+  // visible on the Client Onboarding Asset Intake board.
 
   // 5) Flip status to approved + log it.
   const { error: updErr } = await supabase
