@@ -131,7 +131,11 @@ function wrapText(
   size: number,
   maxWidth: number
 ): string[] {
-  const paragraphs = text.split("\n");
+  // Sanitize here (not just in drawText) because some callers — e.g.
+  // instructionBox measuring bullet widths — call wrapText directly for
+  // layout math. If we only sanitized in drawText, the WinAnsi encoder
+  // would still throw during measurement before any draw happened.
+  const paragraphs = sanitize(text).split("\n");
   const out: string[] = [];
   for (const para of paragraphs) {
     if (para.trim() === "") {
