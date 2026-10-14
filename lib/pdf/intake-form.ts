@@ -16,6 +16,28 @@
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
+/**
+ * Standard Helvetica (what we embed below) only encodes WinAnsi — basic
+ * Latin plus a few Latin-1 extras. Modern typographic glyphs like en/em
+ * dashes, bullets, arrows, and ellipses all crash the encoder.
+ *
+ * We swap them for ASCII-safe equivalents instead of embedding a
+ * Unicode-capable TTF, which would add ~250KB per page load. The
+ * replacements preserve meaning without the typographic polish.
+ */
+function sanitize(s: string): string {
+  return s
+    .replace(/→/g, "->") // → right arrow
+    .replace(/←/g, "<-") // ← left arrow
+    .replace(/•/g, "*") // •
+    .replace(/–/g, "-") // – en-dash
+    .replace(/—/g, "--") // — em-dash
+    .replace(/…/g, "...") // …
+    .replace(/[‘’]/g, "'") // ' '
+    .replace(/[“”]/g, '"') // " "
+    .replace(/ /g, " "); // non-breaking space -> regular
+}
+
 // Letter size, points. Origin is BOTTOM-LEFT in PDF coordinate space.
 const PAGE_W = 612;
 const PAGE_H = 792;
@@ -89,7 +111,7 @@ function drawText(
   const maxWidth = opts.maxWidth ?? CONTENT_W;
   const lineHeight = opts.lineHeight ?? size * 1.4;
 
-  const lines = wrapText(text, font, size, maxWidth);
+  const lines = wrapText(sanitize(text), font, size, maxWidth);
   for (const line of lines) {
     ensureSpace(doc, lineHeight);
     doc.current.drawText(line, {
@@ -408,7 +430,7 @@ function fieldTable(
   const headerY = doc.y;
   let xCursor = MARGIN;
   for (let i = 0; i < headers.length; i++) {
-    doc.current.drawText(headers[i].toUpperCase(), {
+    doc.current.drawText(sanitize(headers[i]).toUpperCase(), {
       x: xCursor,
       y: toPdfY(doc, headerY + 10),
       size: 7.5,
@@ -462,7 +484,7 @@ function pageFooter(doc: Doc) {
       thickness: 0.5,
       color: LINE,
     });
-    p.drawText("Surroundings Group · Brand Intake", {
+    p.drawText(sanitize("Surroundings Group · Brand Intake"), {
       x: MARGIN,
       y: MARGIN,
       size: 8,
