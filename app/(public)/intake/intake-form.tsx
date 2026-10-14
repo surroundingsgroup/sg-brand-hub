@@ -256,6 +256,16 @@ export function IntakeForm({
         <p className="mt-3 text-sm text-muted-foreground">
           Help us bring your brand to life. Fill in what you have.
         </p>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Prefer to fill this out offline?{" "}
+          <a
+            href="/api/intake/pdf?download=1"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-accent"
+          >
+            Download the printable PDF version
+          </a>
+          .
+        </p>
       </div>
 
       {/*
