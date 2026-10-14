@@ -68,6 +68,13 @@ export function IntakeForm({
   ]);
   const [logos, setLogos] = useState<StagedLogo[]>([]);
   const [referenceFiles, setReferenceFiles] = useState<StagedLogo[]>([]);
+  // Live progress + failure state for the upload step. Previously uploads
+  // ran silently in the background and the user got whisked to /thanks
+  // regardless of what landed — resulting in bugs like Camper & Nicholsons
+  // (Oct 2026) where the client thought their logos uploaded but nothing
+  // reached the server.
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; label: string } | null>(null);
+  const [failedUploads, setFailedUploads] = useState<Array<{ name: string; kind: "logo" | "reference" }>>([]);
   // Honeypot — invisible to humans, bots fill it. If non-empty on submit
   // the server silently drops the row. See the hidden <input> in the JSX
   // below and the handler in /api/intake/route.ts.
@@ -86,25 +93,48 @@ export function IntakeForm({
     },
   });
 
-  async function uploadFiles(brandId: string, files: StagedLogo[], kind: "logo" | "reference") {
-    if (files.length === 0) return;
-    const supabase = createSupabaseBrowserClient();
-    for (let i = 0; i < files.length; i++) {
-      const { file } = files[i];
-      const subPath = kind === "reference" ? "reference" : "logo";
-      const path = `${brandId}/${subPath}/${Date.now()}-${i}-${file.name.replace(/\s+/g, "-")}`;
+  /**
+   * Upload a single staged file (Storage + DB row). Returns {ok} / {ok:false,error}
+   * instead of throwing. Includes one retry on transient failure.
+   *
+   * The old implementation swallowed errors with a bare `if (upErr) continue;`,
+   * which meant a failed Storage write or a failed DB insert both looked
+   * identical to success from the user's perspective. The caller now gets
+   * structured outcomes so it can surface them.
+   */
+  async function uploadOne(
+    supabase: ReturnType<typeof createSupabaseBrowserClient>,
+    brandId: string,
+    file: File,
+    index: number,
+    kind: "logo" | "reference"
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const subPath = kind === "reference" ? "reference" : "logo";
+    const safeName = file.name.replace(/\s+/g, "-");
+    async function attempt(): Promise<{ ok: true } | { ok: false; error: string }> {
+      // Fresh path per attempt so a retry doesn't collide with a Storage
+      // record from the first attempt.
+      const path = `${brandId}/${subPath}/${Date.now()}-${index}-${safeName}`;
       const { error: upErr } = await supabase.storage.from("brand-logos").upload(path, file);
-      if (upErr) continue;
+      if (upErr) return { ok: false, error: `Storage upload failed: ${upErr.message}` };
       const { data: pub } = supabase.storage.from("brand-logos").getPublicUrl(path);
-      await supabase.from("brand_logos").insert({
+      const { error: dbErr } = await supabase.from("brand_logos").insert({
         brand_id: brandId,
         file_name: file.name,
         file_path: path,
         public_url: pub.publicUrl,
-        display_order: i,
+        display_order: index,
         logo_type: kind === "reference" ? "reference" : null,
       });
+      if (dbErr) return { ok: false, error: `Save failed: ${dbErr.message}` };
+      return { ok: true };
     }
+    const first = await attempt();
+    if (first.ok) return first;
+    // One short retry — most failures here are transient (rate-limit, flaky
+    // mobile network). If it still fails after that we surface it loudly.
+    await new Promise((r) => setTimeout(r, 800));
+    return attempt();
   }
 
   async function onSubmit(values: IntakeInput) {
@@ -138,6 +168,10 @@ export function IntakeForm({
       website_alt: honeypotRef.current?.value ?? "",
     };
 
+    // Clear any prior-run failure state so a resubmit starts fresh.
+    setFailedUploads([]);
+    setUploadProgress(null);
+
     const res = await fetch("/api/intake", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -150,10 +184,47 @@ export function IntakeForm({
     }
     const { id } = (await res.json()) as { id: string };
 
-    await uploadFiles(id, logos, "logo");
-    await uploadFiles(id, referenceFiles, "reference");
+    // Upload every staged file sequentially, surfacing progress and
+    // collecting failures. We do NOT redirect to /thanks until this is
+    // settled — the prior implementation whisked the user away mid-upload
+    // and failures went unseen (see Camper & Nicholsons bug, Oct 2026).
+    const totalFiles = logos.length + referenceFiles.length;
+    const supabase = createSupabaseBrowserClient();
+    const failures: Array<{ name: string; kind: "logo" | "reference" }> = [];
+    let completed = 0;
 
+    async function runBatch(files: StagedLogo[], kind: "logo" | "reference") {
+      for (let i = 0; i < files.length; i++) {
+        const { file } = files[i];
+        setUploadProgress({ current: completed + 1, total: totalFiles, label: file.name });
+        const result = await uploadOne(supabase, id, file, i, kind);
+        if (!result.ok) {
+          failures.push({ name: file.name, kind });
+          toast.error(`Couldn't upload "${file.name}" — ${result.error}`, { duration: 10000 });
+        }
+        completed++;
+      }
+    }
+
+    if (totalFiles > 0) {
+      await runBatch(logos, "logo");
+      await runBatch(referenceFiles, "reference");
+    }
+
+    setUploadProgress(null);
     setSubmitting(false);
+
+    if (failures.length > 0) {
+      // Keep the user on the form so they can see what failed and either
+      // retry or copy the file list to email their AM. Scroll to top so
+      // the error summary is immediately visible.
+      setFailedUploads(failures);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      return;
+    }
+
     router.push("/thanks");
   }
 
@@ -186,6 +257,36 @@ export function IntakeForm({
           Help us bring your brand to life. Fill in what you have.
         </p>
       </div>
+
+      {/*
+        Upload-failure summary. Appears only after a submit where one or more
+        files failed to upload. The brand record itself is already saved at
+        this point — we're just surfacing which files didn't land so the
+        user can re-attach them or email their AM. Prior behavior was to
+        redirect to /thanks regardless; see Camper & Nicholsons bug (Oct 2026).
+      */}
+      {failedUploads.length > 0 && (
+        <div className="mx-8 mt-6 rounded-xl border border-destructive/40 bg-destructive/5 p-5">
+          <div className="text-sm font-semibold text-destructive">
+            Your brand info was saved, but {failedUploads.length} file{failedUploads.length === 1 ? "" : "s"} couldn&apos;t upload.
+          </div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+            {failedUploads.map((f, i) => (
+              <li key={i}>
+                <span className="font-medium">{f.name}</span>
+                <span className="text-muted-foreground"> ({f.kind})</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Try re-attaching them below and submitting again, or email them to your account manager at{" "}
+            <a className="font-medium text-foreground underline" href="mailto:billy@surroundingsgroup.com">
+              billy@surroundingsgroup.com
+            </a>
+            . We&apos;ll attach them to your profile on our end.
+          </p>
+        </div>
+      )}
 
       <Section label="Your contact info">
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -401,8 +502,19 @@ export function IntakeForm({
 
       <div className="flex flex-col items-center gap-2 px-8 py-10">
         <Button type="submit" size="lg" disabled={submitting} className="w-full md:w-auto">
-          {submitting ? "Submitting…" : "Submit brand intake"}
+          {uploadProgress
+            ? `Uploading ${uploadProgress.current} of ${uploadProgress.total}…`
+            : submitting
+              ? "Submitting…"
+              : failedUploads.length > 0
+                ? "Retry submission"
+                : "Submit brand intake"}
         </Button>
+        {uploadProgress && (
+          <p className="max-w-[32ch] truncate text-xs text-muted-foreground">
+            {uploadProgress.label}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           By submitting you agree to let the SG team contact you to finalize your brand profile.
         </p>
