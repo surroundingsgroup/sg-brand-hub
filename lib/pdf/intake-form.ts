@@ -222,7 +222,10 @@ function textField(
   const form = doc.pdf.getForm();
   const field = form.createTextField(nextFieldName(doc, opts.name));
   if (opts.multiline) field.enableMultiline();
-  field.setFontSize(10);
+  // Order matters: addToPage BEFORE setFontSize. setFontSize mutates the
+  // field's /DA (default appearance) string, which only exists after the
+  // field has been placed on a page with a font. Calling setFontSize first
+  // throws "No /DA entry found" at render time.
   field.addToPage(doc.current, {
     x: MARGIN,
     y: toPdfY(doc, doc.y + height),
@@ -232,7 +235,9 @@ function textField(
     borderColor: LINE,
     backgroundColor: INPUT_BG,
     textColor: INK,
+    font: doc.fonts.regular,
   });
+  field.setFontSize(10);
   doc.y += height + gap;
 }
 
@@ -293,7 +298,6 @@ function twoFields(
   const form = doc.pdf.getForm();
 
   const leftField = form.createTextField(nextFieldName(doc, left.name));
-  leftField.setFontSize(10);
   leftField.addToPage(doc.current, {
     x: MARGIN,
     y: toPdfY(doc, doc.y + height),
@@ -303,10 +307,11 @@ function twoFields(
     borderColor: LINE,
     backgroundColor: INPUT_BG,
     textColor: INK,
+    font: doc.fonts.regular,
   });
+  leftField.setFontSize(10);
 
   const rightField = form.createTextField(nextFieldName(doc, right.name));
-  rightField.setFontSize(10);
   rightField.addToPage(doc.current, {
     x: MARGIN + colW + 14,
     y: toPdfY(doc, doc.y + height),
@@ -316,7 +321,9 @@ function twoFields(
     borderColor: LINE,
     backgroundColor: INPUT_BG,
     textColor: INK,
+    font: doc.fonts.regular,
   });
+  rightField.setFontSize(10);
 
   doc.y += height + 10;
 }
@@ -461,7 +468,6 @@ function fieldTable(
       const field = form.createTextField(
         nextFieldName(doc, `${baseName}_r${r}_c${c}`)
       );
-      field.setFontSize(10);
       field.addToPage(doc.current, {
         x: xCursor,
         y: toPdfY(doc, doc.y + rowHeight),
@@ -471,7 +477,9 @@ function fieldTable(
         borderColor: LINE,
         backgroundColor: INPUT_BG,
         textColor: INK,
+        font: doc.fonts.regular,
       });
+      field.setFontSize(10);
       xCursor += colWidths[c] + gap;
     }
     doc.y += rowHeight + 4;
