@@ -290,49 +290,51 @@ export function contractPeriods(
   return out;
 }
 
-// ── Contract health: one light, one reason ───────────────────────────────────
-// Same language as the shoot weather: green / yellow / red, with the reason in
-// plain words. Judged on the contract to date (shoots roll over between
-// periods), plus whether the next shoot is actually on the calendar.
-//   red    — behind by 2 or more, the term ended short, or renewal has passed
-//   yellow — behind by 1, or this period still has an open shoot and nothing
-//            is scheduled
-//   green  — everything else
-export type ContractHealth = { level: "green" | "yellow" | "red"; label: string; reason: string };
+// ── Health: two lights, each with a reason ───────────────────────────────────
+// Same language as the shoot weather (green / yellow / red), split the way the
+// account managers think about it:
+//   • this period  — is this month's quota done or at least booked?
+//   • full contract — are we on pace for everything the contract owes?
+// Shoots roll over, so the contract light is judged on the running total; the
+// period light keeps nudging while this month has an open shoot and nothing
+// booked, even if a banked extra would technically cover it (Billy's call).
+export type Health = { level: "green" | "yellow" | "red"; label: string; reason?: string };
 
-export function contractHealth(
-  pace: ContractPace,
-  opts: { current?: ContractPeriod | null; hasUpcomingShoot: boolean; renewalOverdue?: boolean }
-): ContractHealth {
-  if (pace.status === "complete") {
-    return { level: "green", label: "Contract fulfilled", reason: "Every contracted shoot is done." };
+export function periodHealth(current: ContractPeriod | null | undefined): Health | null {
+  if (!current) return null;
+  const done = current.shoots.length;
+  const booked = current.scheduled.length;
+  const tally = `${done} of ${current.owed} shoot${current.owed === 1 ? "" : "s"} done`;
+  if (done >= current.owed) return { level: "green", label: "Covered", reason: `${tally}.` };
+  if (done + booked >= current.owed) {
+    return { level: "green", label: "On schedule", reason: `${tally}, ${booked} more booked.` };
   }
-  const booked = opts.hasUpcomingShoot ? "The next shoot is booked." : "Nothing is scheduled.";
-  if (opts.renewalOverdue) {
-    return { level: "red", label: "At risk", reason: "The renewal date has passed." };
-  }
+  return {
+    level: "yellow",
+    label: "Keep an eye on it",
+    reason: booked > 0 ? `${tally}, ${booked} booked, ${current.owed - done - booked} still to schedule.` : `${tally}, nothing else scheduled.`,
+  };
+}
+
+//   red    — behind by 2 or more, the term ended short, or renewal has passed
+//   yellow — behind by 1
+//   green  — on pace or ahead
+export function contractHealth(pace: ContractPace, opts: { renewalOverdue?: boolean } = {}): Health {
+  if (pace.status === "complete") return { level: "green", label: "Contract fulfilled" };
+  if (opts.renewalOverdue) return { level: "red", label: "Renewal date has passed" };
   // Term over (nothing in progress) and still short.
   if (pace.status === "behind" && pace.inProgressQuota === 0) {
     return {
       level: "red",
-      label: "At risk",
-      reason: `The term ended with ${pace.done}${pace.total != null ? ` of ${pace.total}` : ""} shoots done.`,
+      label: "Term ended short",
+      reason: `${pace.done}${pace.total != null ? ` of ${pace.total}` : ""} shoots done.`,
     };
   }
   const behind = Math.max(0, -pace.delta);
-  if (behind >= 2) return { level: "red", label: "Behind", reason: `Behind by ${behind}. ${booked}` };
-  if (behind === 1) return { level: "yellow", label: "Keep an eye on it", reason: `Behind by 1. ${booked}` };
-  const cur = opts.current;
-  const periodOpen = !!cur && cur.shoots.length + cur.scheduled.length < cur.owed;
-  if (!opts.hasUpcomingShoot && periodOpen) {
-    return { level: "yellow", label: "Keep an eye on it", reason: "On pace, but nothing is scheduled." };
-  }
+  if (behind >= 2) return { level: "red", label: `Behind by ${behind}` };
+  if (behind === 1) return { level: "yellow", label: "Behind by 1" };
   const ahead = pace.done - pace.expectedToDate - pace.inProgressQuota;
-  return {
-    level: "green",
-    label: "On track",
-    reason: ahead > 0 ? `Ahead by ${ahead}.` : opts.hasUpcomingShoot ? "On pace, and the next shoot is booked." : "On pace.",
-  };
+  return { level: "green", label: ahead > 0 ? `Ahead by ${ahead}` : "On track" };
 }
 
 // ── Make-ups: extra shoots covering short periods ────────────────────────────

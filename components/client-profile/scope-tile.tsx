@@ -45,6 +45,7 @@ import {
   contractPace,
   contractPeriods,
   kindCountsInContract,
+  periodHealth,
   type ContractBalance,
   type ContractPeriod,
   type DatedProject,
@@ -224,6 +225,50 @@ function ContractCalendar({ periods, balance }: { periods: ContractPeriod[]; bal
         </span>
         {shown.length < periods.length ? <span>· showing {shown.length} of {periods.length} periods</span> : null}
       </div>
+    </div>
+  );
+}
+
+// ── Status line ───────────────────────────────────────────────────────────────
+// One quiet line per light: dot, what it covers, the verdict. The reason is a
+// tap away, so the box stays calm at a glance.
+const STATUS_TONE = {
+  red: { dot: "bg-destructive", text: "text-destructive" },
+  yellow: { dot: "bg-amber-400", text: "text-amber-700" },
+  green: { dot: "bg-emerald-500", text: "text-emerald-700" },
+} as const;
+
+function StatusRow({
+  scope,
+  level,
+  label,
+  reason,
+}: {
+  scope: string;
+  level: "green" | "yellow" | "red";
+  label: string;
+  reason?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const tone = STATUS_TONE[level];
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => reason && setOpen((v) => !v)}
+        aria-expanded={reason ? open : undefined}
+        className="flex w-full items-center gap-2 px-2.5 py-3 text-left text-xs md:py-2"
+      >
+        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${tone.dot}`} />
+        <span className="flex-shrink-0 text-muted-foreground">{scope}</span>
+        <span className={`min-w-0 flex-1 truncate text-right font-semibold ${tone.text}`}>{label}</span>
+        {reason ? (
+          <ChevronDown
+            className={`h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        ) : null}
+      </button>
+      {open && reason ? <div className="px-2.5 pb-2.5 pl-[26px] text-[11px] leading-snug text-muted-foreground">{reason}</div> : null}
     </div>
   );
 }
@@ -485,20 +530,21 @@ export function ScopeTile({
         : null;
     const unit = pace ? pace.unitLabel.toLowerCase() : "period";
     const perPeriod = remaining != null && periodsLeft ? remaining / periodsLeft : null;
-    const health = pace
-      ? contractHealth(pace, {
-          current: currentPeriod,
-          hasUpcomingShoot: !!nextShoot,
-          renewalOverdue: daysToRenewal != null && daysToRenewal < 0,
-        })
-      : null;
-    const healthTone = !health
+    // Two lights: this period, then the full contract.
+    const monthHealth = pace && pace.status !== "complete" ? periodHealth(currentPeriod) : null;
+    const health = pace ? contractHealth(pace, { renewalOverdue: daysToRenewal != null && daysToRenewal < 0 }) : null;
+    // The contract line carries the make-up story when there is one; otherwise the running total.
+    const contractReason = !pace || !health
       ? null
-      : health.level === "red"
-        ? { box: "bg-destructive/10", dot: "bg-destructive", text: "text-destructive" }
-        : health.level === "yellow"
-          ? { box: "bg-amber-50", dot: "bg-amber-400", text: "text-amber-900" }
-          : { box: "bg-emerald-50", dot: "bg-emerald-500", text: "text-emerald-900" };
+      : (health.reason ??
+        balanceNote ??
+        `${pace.done}${pace.total != null ? ` of ${pace.total}` : ""} shoots done${
+          pace.expectedToDate > 0 ? `, ${pace.expectedToDate} were due by the end of ${lastClosed ? lastClosed.short : `last ${unit}`}` : ""
+        }.`);
+    const lights = [
+      monthHealth ? { scope: `This ${unit}`, ...monthHealth } : null,
+      health ? { scope: "Full contract", level: health.level, label: health.label, reason: contractReason ?? undefined } : null,
+    ].filter((x): x is { scope: string; level: "green" | "yellow" | "red"; label: string; reason: string | undefined } => !!x);
 
     return (
       <Tile label="Scope & contract health" icon={<BarChart3 className="h-3.5 w-3.5" />} spans={2}>
@@ -545,24 +591,22 @@ export function ScopeTile({
             </TileEmpty>
           ) : (
             <div className="flex flex-col gap-3">
-              {scope.shoot_cadence ? (
+              {scope.shoot_cadence && !(pace && pace.status !== "not_started") ? (
                 <Meter label="Shoots this month" done={shootsThisPeriod} quota={quota} />
               ) : null}
-              {pace && health && healthTone && pace.status !== "not_started" ? (
+              {pace && health && pace.status !== "not_started" ? (
                 <div className="flex flex-col gap-2 rounded-md border border-border bg-secondary/20 p-2.5">
                   <div className="text-[11px] font-medium text-foreground">
                     Contract to date
                     {pool ? <span className="font-normal text-muted-foreground"> · shared pool with {pool.name}</span> : null}
                   </div>
-                  {/* The light: one colour, one reason. */}
-                  <div className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-xs ${healthTone.box} ${healthTone.text}`}>
-                    <span className={`mt-[3px] h-2.5 w-2.5 flex-shrink-0 rounded-full ${healthTone.dot}`} />
-                    <span>
-                      <span className="font-semibold">{health.label}.</span> {health.reason}
-                    </span>
+                  {/* Two lights, one line each: this month, then the full contract. Tap for the reason. */}
+                  <div className="divide-y divide-border rounded-md border border-border bg-panel">
+                    {lights.map((l) => (
+                      <StatusRow key={l.scope} scope={l.scope} level={l.level} label={l.label} reason={l.reason} />
+                    ))}
                   </div>
                   {timeline.length ? <ContractCalendar periods={timeline} balance={balance} /> : null}
-                  {balanceNote ? <div className="text-[11px] leading-snug text-foreground">{balanceNote}</div> : null}
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                     <span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">{pace.done}</span>
@@ -611,7 +655,7 @@ export function ScopeTile({
                             <span className="text-muted-foreground"> · {projectLabel(nextShoot)}</span>
                           </>
                         ) : (
-                          <span className={health.level === "green" ? "text-muted-foreground" : "font-medium text-amber-700"}>
+                          <span className={monthHealth?.level === "yellow" ? "font-medium text-amber-700" : "text-muted-foreground"}>
                             None scheduled
                           </span>
                         )}
