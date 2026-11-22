@@ -40,9 +40,12 @@ import {
   type ShootCadence,
 } from "@/lib/scope/types";
 import {
+  contractBalance,
+  contractHealth,
   contractPace,
   contractPeriods,
   kindCountsInContract,
+  type ContractBalance,
   type ContractPeriod,
   type DatedProject,
 } from "@/lib/scope/pace";
@@ -116,13 +119,15 @@ function LogLine({ p, tag, showClient }: { p: DatedProject; tag?: string; showCl
 
 // ── Contract calendar ─────────────────────────────────────────────────────────
 // The whole term laid out one column per period (a month, usually). Each
-// square is one shoot: green = done, red outline = owed in a past period and
-// not done, grey outline = still to come. A missed square in one month and an
-// extra green one in another is exactly how a rolled-over shoot looks.
+// square is one shoot: green = done, dark green = an extra shoot beyond that
+// period's quota, blue = booked on Monday for a date still ahead, grey
+// outline = still to come. A shoot missed in a past period is a green outline
+// once an extra shoot elsewhere has made it up, and a red outline only while
+// it is still owed.
 const CALENDAR_MAX_COLUMNS = 12;
 const CALENDAR_MAX_SLOTS = 6;
 
-function ContractCalendar({ periods }: { periods: ContractPeriod[] }) {
+function ContractCalendar({ periods, balance }: { periods: ContractPeriod[]; balance: ContractBalance }) {
   // Long terms (weekly cadence, open-ended contracts): a 12-column window
   // around the current period.
   let shown = periods;
@@ -136,24 +141,39 @@ function ContractCalendar({ periods }: { periods: ContractPeriod[] }) {
       <div className="flex items-end gap-1" role="img" aria-label="Shoots done and owed in each period of the contract">
         {shown.map((per) => {
           const done = per.shoots.length;
-          const slots = Math.min(Math.max(per.owed, done), CALENDAR_MAX_SLOTS);
-          const hidden = Math.max(per.owed, done) - slots;
+          const booked = per.scheduled.length;
+          const slots = Math.min(Math.max(per.owed, done + booked), CALENDAR_MAX_SLOTS);
+          const hidden = Math.max(per.owed, done + booked) - slots;
+          const bal = balance.byIndex[per.index];
+          const madeUp = bal?.madeUp ?? 0;
           const missing = per.future
             ? "border border-border"
             : per.inProgress
               ? "border border-dashed border-amber-500 bg-amber-50"
               : "border border-destructive/60 bg-destructive/10";
+          // Slot i, bottom to top: quota shoots, extra shoots, booked, then
+          // what was missed (made up first, still-owed last).
+          const slotClass = (i: number) =>
+            i < Math.min(done, per.owed)
+              ? "bg-emerald-500"
+              : i < done
+                ? "bg-emerald-700"
+                : i < done + booked
+                  ? "border border-sky-500 bg-sky-200"
+                  : i < done + booked + madeUp
+                    ? "border border-emerald-500 bg-emerald-50"
+                    : missing;
           return (
             <div
               key={per.index}
-              title={`${per.label}: ${done} of ${per.owed}`}
+              title={`${per.label}: ${done} of ${per.owed}${booked ? `, ${booked} booked` : ""}${madeUp ? `, ${madeUp} made up later` : ""}`}
               className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md px-0.5 pb-1 pt-1.5 ${per.inProgress ? "bg-foreground/[0.06]" : ""}`}
             >
               <div className="flex w-full flex-col-reverse items-center gap-[3px]">
                 {Array.from({ length: slots }, (_, i) => (
                   <span
                     key={i}
-                    className={`block h-2.5 w-full max-w-[18px] rounded-[3px] ${i < done ? "bg-emerald-500" : missing}`}
+                    className={`block h-2.5 w-full max-w-[18px] rounded-[3px] ${slotClass(i)}`}
                   />
                 ))}
                 {hidden > 0 ? <span className="text-[8px] leading-none text-muted-foreground">+{hidden}</span> : null}
@@ -174,10 +194,30 @@ function ContractCalendar({ periods }: { periods: ContractPeriod[] }) {
           <span className="block h-2 w-2.5 rounded-[2px] bg-emerald-500" />
           Shoot done
         </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="block h-2 w-2.5 rounded-[2px] border border-destructive/60 bg-destructive/10" />
-          Owed, not done
-        </span>
+        {periods.some((per) => per.scheduled.length > 0) ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="block h-2 w-2.5 rounded-[2px] border border-sky-500 bg-sky-200" />
+            Booked
+          </span>
+        ) : null}
+        {periods.some((per) => per.shoots.length > per.owed) ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="block h-2 w-2.5 rounded-[2px] bg-emerald-700" />
+            Extra shoot
+          </span>
+        ) : null}
+        {balance.madeUpTotal > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="block h-2 w-2.5 rounded-[2px] border border-emerald-500 bg-emerald-50" />
+            Made up
+          </span>
+        ) : null}
+        {balance.missedTotal > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="block h-2 w-2.5 rounded-[2px] border border-destructive/60 bg-destructive/10" />
+            Owed, not done
+          </span>
+        ) : null}
         <span className="inline-flex items-center gap-1">
           <span className="block h-2 w-2.5 rounded-[2px] border border-border" />
           Still to come
@@ -409,18 +449,56 @@ export function ScopeTile({
     const periods = timeline.filter((per) => !per.future);
     // "Due by the end of Oct" — the last period that has fully passed.
     const lastClosed = [...periods].reverse().find((per) => !per.inProgress);
-    const paceChip = !pace
+    // Make-ups: which short periods the extra shoots have covered.
+    const balance = contractBalance(timeline);
+    const names = (idx: number[]) => {
+      const list = idx.map((i) => timeline.find((per) => per.index === i)?.short ?? "").filter(Boolean);
+      return list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+    };
+    const shortIdx = Object.entries(balance.byIndex)
+      .filter(([, b]) => b.madeUp + b.missed > 0)
+      .map(([i]) => Number(i));
+    const coverIdx = [...new Set(Object.values(balance.byIndex).flatMap((b) => b.coveredBy))].sort((a, b) => a - b);
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const bankNote = balance.banked > 0 ? `${plural(balance.banked, "extra shoot")} still in the bank` : "";
+    const balanceNote =
+      balance.shortTotal === 0
+        ? balance.banked > 0
+          ? `${plural(balance.banked, "extra shoot")} in the bank, beyond what the contract has called for so far.`
+          : null
+        : balance.missedTotal === 0
+          ? `${names(shortIdx)} ${shortIdx.length === 1 ? "was" : "were"} short by ${balance.shortTotal}. Extra shoots in ${names(coverIdx)} made that up${bankNote ? `, with ${bankNote}` : ""}.`
+          : balance.madeUpTotal > 0
+            ? `${names(shortIdx)} ${shortIdx.length === 1 ? "was" : "were"} short by ${balance.shortTotal}. Extra shoots in ${names(coverIdx)} made up ${balance.madeUpTotal}; ${balance.missedTotal} still owed.`
+            : `${names(shortIdx)} ${shortIdx.length === 1 ? "was" : "were"} short by ${balance.shortTotal}, not made up yet.`;
+
+    // Last / next shoot inside this contract, and what it takes to finish.
+    const flatShoots = timeline.flatMap((per) => per.shoots);
+    const lastShoot = flatShoots.length ? flatShoots[flatShoots.length - 1] : null;
+    const nextShoot = timeline.flatMap((per) => per.scheduled)[0] ?? null;
+    const currentPeriod = periods.find((per) => per.inProgress) ?? null;
+    const daysSinceLast = lastShoot ? Math.max(0, -(daysUntil(lastShoot.date.slice(0, 10)) ?? 0)) : null;
+    const remaining = pace && pace.total != null ? Math.max(0, pace.total - pace.done) : null;
+    const periodsLeft =
+      pace && pace.periodCount != null && pace.status !== "complete" && pace.inProgressQuota > 0
+        ? Math.max(1, pace.periodCount - pace.periodIndex + 1)
+        : null;
+    const unit = pace ? pace.unitLabel.toLowerCase() : "period";
+    const perPeriod = remaining != null && periodsLeft ? remaining / periodsLeft : null;
+    const health = pace
+      ? contractHealth(pace, {
+          current: currentPeriod,
+          hasUpcomingShoot: !!nextShoot,
+          renewalOverdue: daysToRenewal != null && daysToRenewal < 0,
+        })
+      : null;
+    const healthTone = !health
       ? null
-      : pace.status === "behind"
-        ? { text: `Behind by ${Math.abs(pace.delta)}`, className: "bg-destructive/10 text-destructive" }
-        : pace.status === "ahead"
-          ? {
-              text: `Ahead by ${pace.done - pace.expectedToDate - pace.inProgressQuota}`,
-              className: "bg-accent-soft text-accent-foreground",
-            }
-          : pace.status === "complete"
-            ? { text: "Contract fulfilled", className: "bg-emerald-100 text-emerald-900" }
-            : { text: "On track", className: "bg-emerald-100 text-emerald-900" };
+      : health.level === "red"
+        ? { box: "bg-destructive/10", dot: "bg-destructive", text: "text-destructive" }
+        : health.level === "yellow"
+          ? { box: "bg-amber-50", dot: "bg-amber-400", text: "text-amber-900" }
+          : { box: "bg-emerald-50", dot: "bg-emerald-500", text: "text-emerald-900" };
 
     return (
       <Tile label="Scope & contract health" icon={<BarChart3 className="h-3.5 w-3.5" />} spans={2}>
@@ -470,18 +548,21 @@ export function ScopeTile({
               {scope.shoot_cadence ? (
                 <Meter label="Shoots this month" done={shootsThisPeriod} quota={quota} />
               ) : null}
-              {pace && paceChip && pace.status !== "not_started" ? (
-                <div className="flex flex-col gap-1.5 rounded-md border border-border bg-secondary/20 p-2.5">
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-medium text-foreground">
-                      Contract to date
-                      {pool ? <span className="font-normal text-muted-foreground"> · shared pool with {pool.name}</span> : null}
-                    </span>
-                    <span className={`inline-flex flex-shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium ${paceChip.className}`}>
-                      {paceChip.text}
+              {pace && health && healthTone && pace.status !== "not_started" ? (
+                <div className="flex flex-col gap-2 rounded-md border border-border bg-secondary/20 p-2.5">
+                  <div className="text-[11px] font-medium text-foreground">
+                    Contract to date
+                    {pool ? <span className="font-normal text-muted-foreground"> · shared pool with {pool.name}</span> : null}
+                  </div>
+                  {/* The light: one colour, one reason. */}
+                  <div className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-xs ${healthTone.box} ${healthTone.text}`}>
+                    <span className={`mt-[3px] h-2.5 w-2.5 flex-shrink-0 rounded-full ${healthTone.dot}`} />
+                    <span>
+                      <span className="font-semibold">{health.label}.</span> {health.reason}
                     </span>
                   </div>
-                  {timeline.length ? <ContractCalendar periods={timeline} /> : null}
+                  {timeline.length ? <ContractCalendar periods={timeline} balance={balance} /> : null}
+                  {balanceNote ? <div className="text-[11px] leading-snug text-foreground">{balanceNote}</div> : null}
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                     <span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">{pace.done}</span>
@@ -501,6 +582,64 @@ export function ScopeTile({
                       {pace.periodCount ? ` of ${pace.periodCount}` : ""}
                     </span>
                   </div>
+                  {/* What's next */}
+                  <dl className="flex flex-col gap-1 border-t border-border pt-2 text-[11px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="flex-shrink-0 text-muted-foreground">Last shoot</dt>
+                      <dd className="min-w-0 truncate text-right text-foreground">
+                        {lastShoot ? (
+                          <>
+                            {shortDate(lastShoot.date)}
+                            {daysSinceLast != null ? (
+                              <span className="text-muted-foreground">
+                                {" · "}
+                                {daysSinceLast === 0 ? "today" : `${daysSinceLast} day${daysSinceLast === 1 ? "" : "s"} ago`}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">None yet</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="flex-shrink-0 text-muted-foreground">Next shoot</dt>
+                      <dd className="min-w-0 truncate text-right text-foreground">
+                        {nextShoot ? (
+                          <>
+                            {shortDate(nextShoot.date)}
+                            <span className="text-muted-foreground"> · {projectLabel(nextShoot)}</span>
+                          </>
+                        ) : (
+                          <span className={health.level === "green" ? "text-muted-foreground" : "font-medium text-amber-700"}>
+                            None scheduled
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    {remaining != null ? (
+                      <div className="flex items-baseline justify-between gap-3">
+                        <dt className="flex-shrink-0 text-muted-foreground">To finish on time</dt>
+                        <dd className="min-w-0 text-right text-foreground">
+                          {remaining === 0 ? (
+                            "All shoots done"
+                          ) : (
+                            <>
+                              {remaining} left
+                              {perPeriod != null ? (
+                                <span className="text-muted-foreground">
+                                  {" · "}
+                                  {Number.isInteger(perPeriod) ? perPeriod : `about ${perPeriod.toFixed(1)}`} a {unit} for{" "}
+                                  {periodsLeft} {unit}
+                                  {periodsLeft === 1 ? "" : "s"}
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
                   {extras.length ? (
                     <div className="text-[11px] text-muted-foreground">Also since the start: {extras.join(" · ")}</div>
                   ) : null}
@@ -517,7 +656,9 @@ export function ScopeTile({
                         <div className="divide-y divide-border rounded-md border border-border bg-panel">
                           {periods.map((per) => {
                             const short = per.shoots.length < per.owed;
-                            const tone = !short
+                            const bal = balance.byIndex[per.index];
+                            const covered = short && !per.inProgress && !!bal && bal.missed === 0;
+                            const tone = !short || covered
                               ? "text-emerald-700"
                               : per.inProgress
                                 ? "text-amber-700"
@@ -533,6 +674,7 @@ export function ScopeTile({
                                   </span>
                                   <span className={`font-medium tabular-nums ${tone}`}>
                                     {per.shoots.length} / {per.owed}
+                                    {covered && bal ? <span className="font-normal"> · made up in {names(bal.coveredBy)}</span> : null}
                                   </span>
                                 </div>
                                 {per.shoots.length === 0 ? (
@@ -540,6 +682,9 @@ export function ScopeTile({
                                 ) : null}
                                 {per.shoots.map((p, i) => (
                                   <LogLine key={`s${i}`} p={p} showClient={!!pool} />
+                                ))}
+                                {per.scheduled.map((p, i) => (
+                                  <LogLine key={`b${i}`} p={p} tag="Booked" showClient={!!pool} />
                                 ))}
                                 {per.micro.map((p, i) => (
                                   <LogLine key={`m${i}`} p={p} tag="Micro" showClient={!!pool} />

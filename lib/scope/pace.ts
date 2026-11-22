@@ -217,6 +217,7 @@ export type ContractPeriod = {
   owed: number;
   inProgress: boolean; // the current, unfinished period
   future: boolean; // hasn't started yet (only present with includeFuture)
+  scheduled: DatedProject[]; // shoots on Monday with a date still ahead of today
   shoots: DatedProject[];
   micro: DatedProject[];
   edits: DatedProject[];
@@ -252,10 +253,13 @@ export function contractPeriods(
     monthsPer ? addMonths(start, i * monthsPer) : new Date(start.getTime() + i * daysPer! * 86400000);
   const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-US", opts);
 
-  const sorted = projects
+  const dated = projects
     .map((p) => ({ p, d: day(p.date) }))
-    .filter((x): x is { p: DatedProject; d: Date } => !!x.d && x.d < happenedBefore)
+    .filter((x): x is { p: DatedProject; d: Date } => !!x.d)
     .sort((a, b) => a.d.getTime() - b.d.getTime());
+  const sorted = dated.filter((x) => x.d < happenedBefore);
+  // Booked but not shot yet: a shoot with a date after today.
+  const upcoming = dated.filter((x) => x.d >= happenedBefore && x.p.kind === "shoot");
 
   const out: ContractPeriod[] = [];
   for (let i = 0; i < 600; i++) {
@@ -279,8 +283,132 @@ export function contractPeriods(
       shoots: inRange.filter((x) => x.kind === "shoot"),
       micro: inRange.filter((x) => x.kind === "micro"),
       edits: inRange.filter((x) => x.kind === "edit"),
+      scheduled: upcoming.filter((x) => x.d >= ps && x.d < pe).map((x) => x.p),
     });
     if (endExclusive && pe >= endExclusive) break;
   }
   return out;
+}
+
+// ── Contract health: one light, one reason ───────────────────────────────────
+// Same language as the shoot weather: green / yellow / red, with the reason in
+// plain words. Judged on the contract to date (shoots roll over between
+// periods), plus whether the next shoot is actually on the calendar.
+//   red    — behind by 2 or more, the term ended short, or renewal has passed
+//   yellow — behind by 1, or this period still has an open shoot and nothing
+//            is scheduled
+//   green  — everything else
+export type ContractHealth = { level: "green" | "yellow" | "red"; label: string; reason: string };
+
+export function contractHealth(
+  pace: ContractPace,
+  opts: { current?: ContractPeriod | null; hasUpcomingShoot: boolean; renewalOverdue?: boolean }
+): ContractHealth {
+  if (pace.status === "complete") {
+    return { level: "green", label: "Contract fulfilled", reason: "Every contracted shoot is done." };
+  }
+  const booked = opts.hasUpcomingShoot ? "The next shoot is booked." : "Nothing is scheduled.";
+  if (opts.renewalOverdue) {
+    return { level: "red", label: "At risk", reason: "The renewal date has passed." };
+  }
+  // Term over (nothing in progress) and still short.
+  if (pace.status === "behind" && pace.inProgressQuota === 0) {
+    return {
+      level: "red",
+      label: "At risk",
+      reason: `The term ended with ${pace.done}${pace.total != null ? ` of ${pace.total}` : ""} shoots done.`,
+    };
+  }
+  const behind = Math.max(0, -pace.delta);
+  if (behind >= 2) return { level: "red", label: "Behind", reason: `Behind by ${behind}. ${booked}` };
+  if (behind === 1) return { level: "yellow", label: "Keep an eye on it", reason: `Behind by 1. ${booked}` };
+  const cur = opts.current;
+  const periodOpen = !!cur && cur.shoots.length + cur.scheduled.length < cur.owed;
+  if (!opts.hasUpcomingShoot && periodOpen) {
+    return { level: "yellow", label: "Keep an eye on it", reason: "On pace, but nothing is scheduled." };
+  }
+  const ahead = pace.done - pace.expectedToDate - pace.inProgressQuota;
+  return {
+    level: "green",
+    label: "On track",
+    reason: ahead > 0 ? `Ahead by ${ahead}.` : opts.hasUpcomingShoot ? "On pace, and the next shoot is booked." : "On pace.",
+  };
+}
+
+// ── Make-ups: extra shoots covering short periods ────────────────────────────
+// Shoots roll over, so an extra shoot in one period covers a missed one in
+// another. Walking the periods in order, each extra shoot goes to the oldest
+// uncovered miss; a miss draws on any extras already banked before it. What is
+// left over at the end is either still owed (missed) or still banked (extra).
+// Only periods that have fully passed can be "short" — the current one is
+// still in play.
+export type PeriodBalance = {
+  madeUp: number; // missed shoots here that an extra shoot elsewhere has covered
+  missed: number; // missed shoots here that nothing has covered yet
+  extra: number; // shoots here beyond the period's quota
+  coveredBy: number[]; // period indexes whose extra shoots covered this one
+};
+
+export type ContractBalance = {
+  byIndex: Record<number, PeriodBalance>;
+  shortTotal: number; // missed shoots across passed periods, before make-ups
+  madeUpTotal: number;
+  missedTotal: number; // still owed
+  banked: number; // extra shoots not needed to cover anything yet
+};
+
+export function contractBalance(periods: ContractPeriod[]): ContractBalance {
+  const byIndex: Record<number, PeriodBalance> = {};
+  const openMisses: { index: number; left: number }[] = [];
+  const openExtras: { index: number; left: number }[] = [];
+  let shortTotal = 0;
+  let madeUpTotal = 0;
+
+  const cover = (missIndex: number, extraIndex: number, n: number) => {
+    byIndex[missIndex].madeUp += n;
+    byIndex[missIndex].missed -= n;
+    if (!byIndex[missIndex].coveredBy.includes(extraIndex)) byIndex[missIndex].coveredBy.push(extraIndex);
+    madeUpTotal += n;
+  };
+
+  for (const per of periods) {
+    if (per.future) continue;
+    const done = per.shoots.length;
+    const extra = Math.max(0, done - per.owed);
+    const short = per.inProgress ? 0 : Math.max(0, per.owed - done);
+    byIndex[per.index] = { madeUp: 0, missed: short, extra, coveredBy: [] };
+    shortTotal += short;
+
+    // A short period first draws on extras banked earlier.
+    let need = short;
+    while (need > 0 && openExtras.length) {
+      const src = openExtras[0];
+      const n = Math.min(need, src.left);
+      cover(per.index, src.index, n);
+      src.left -= n;
+      need -= n;
+      if (src.left === 0) openExtras.shift();
+    }
+    if (need > 0) openMisses.push({ index: per.index, left: need });
+
+    // Extra shoots here go to the oldest uncovered miss.
+    let spare = extra;
+    while (spare > 0 && openMisses.length) {
+      const miss = openMisses[0];
+      const n = Math.min(spare, miss.left);
+      cover(miss.index, per.index, n);
+      miss.left -= n;
+      spare -= n;
+      if (miss.left === 0) openMisses.shift();
+    }
+    if (spare > 0) openExtras.push({ index: per.index, left: spare });
+  }
+
+  return {
+    byIndex,
+    shortTotal,
+    madeUpTotal,
+    missedTotal: openMisses.reduce((n, m) => n + m.left, 0),
+    banked: openExtras.reduce((n, e) => n + e.left, 0),
+  };
 }
