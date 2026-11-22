@@ -25,7 +25,13 @@ import { formatRelativeDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function BrandDetailPage({ params }: { params: { id: string } }) {
+export default async function BrandDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { from?: string };
+}) {
   const supabase = createSupabaseServerClient();
   const [{ data: brand }, { data: logos }, { data: activity }] = await Promise.all([
     supabase.from("brands").select("*").eq("id", params.id).single(),
@@ -59,13 +65,22 @@ export default async function BrandDetailPage({ params }: { params: { id: string
     "other",
   ].map((value) => ({ value, label: VERTICAL_LABELS[value as keyof typeof VERTICAL_LABELS] }));
 
+  // Back-link target. Default = dashboard. If the URL carries
+  // ?from=client, return to that client's Hub profile — this is the
+  // path the client profile's "Brand assets" and Files tiles use when
+  // they link here, so the back button feels natural.
+  const backHref =
+    searchParams.from === "client" ? `/client/${params.id}` : "/dashboard";
+  const backLabel =
+    searchParams.from === "client" ? `Back to client` : "Back";
+
   return (
     <PageContainer>
       <div className="mb-6">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/dashboard">
+          <Link href={backHref}>
             <ChevronLeft className="h-4 w-4" />
-            Back
+            {backLabel}
           </Link>
         </Button>
       </div>
@@ -243,9 +258,12 @@ export default async function BrandDetailPage({ params }: { params: { id: string
         </TabsContent>
 
         <TabsContent value="notes">
-          <div className="panel px-6 py-6">
-            <FormSection label="Internal Notes" className="py-0" description="Visible to the SG team only — never appears in the client-facing PDF.">
+          <div className="panel divide-y divide-border px-6">
+            <FormSection label="Internal Notes" description="Visible to the SG team only — never appears in the client-facing PDF.">
               <EditableField label="" field="internal_notes" multiline initialValue={b.internal_notes ?? ""} brandId={b.id} onSave={updateBrand} />
+            </FormSection>
+            <FormSection label="Client Documents" description="Credentials, logins, pre-docs the client shared with us. Team-visible — surfaced on the client profile.">
+              <EditableField label="" field="client_documents" multiline initialValue={b.client_documents ?? ""} brandId={b.id} onSave={updateBrand} placeholder={"e.g.\nInstagram: handle / pw\nFacebook page admin: ...\nBrand portal: url / login\nPre-shoot brief PDF: ..."} />
             </FormSection>
           </div>
         </TabsContent>

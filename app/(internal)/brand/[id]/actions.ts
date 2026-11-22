@@ -69,8 +69,9 @@ type BrandPatch = Partial<{
   colors: BrandColor[];
   fonts: BrandFont[];
   internal_notes: string | null;
+  client_documents: string | null;
   status: "draft" | "submitted" | "in_review" | "approved" | "archived";
-  engagement_type: "retainer" | "project" | "inactive";
+  engagement_type: "prospect" | "retainer" | "project" | "inactive";
 }>;
 
 export async function updateBrand(id: string, patch: BrandPatch) {
@@ -93,6 +94,12 @@ export async function updateBrand(id: string, patch: BrandPatch) {
   let effectivePatch: BrandPatch = patch;
   if (!patch.status && (priorRow?.status === "submitted" || priorRow?.status === "draft")) {
     effectivePatch = { ...patch, status: "in_review" };
+  }
+
+  // AM is canonical in account_manager; the Brief tool keeps a legacy `am`
+  // mirror. When AM changes here, mirror it to `am` so neither app goes stale.
+  if (Object.prototype.hasOwnProperty.call(patch, "account_manager")) {
+    (effectivePatch as Record<string, unknown>).am = patch.account_manager ?? null;
   }
 
   const { error } = await supabase.from("brands").update(effectivePatch).eq("id", id);

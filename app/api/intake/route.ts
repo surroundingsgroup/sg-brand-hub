@@ -85,9 +85,7 @@ export async function POST(request: Request) {
     // best-effort — never block an intake submission on the dupe check
   }
 
-  const { data, error } = await supabase
-    .from("brands")
-    .insert({
+  const intakeRow = {
       submitter_name: v.submitter_name,
       submitter_email: v.submitter_email,
       submitter_phone: v.submitter_phone || null,
@@ -123,9 +121,20 @@ export async function POST(request: Request) {
       colors,
       fonts,
       status: "submitted",
-    })
-    .select("id")
-    .single();
+  };
+
+  // Lifecycle: a submission with no won deal behind it is a PROSPECT (e.g. BD
+  // sent the intake link mid-sales-cycle to collect branding for the pitch).
+  // Deal-sourced submissions (Closed Won intake link) keep the column default.
+  // If the enum value isn't available for any reason, fall back to a plain
+  // insert — a public intake submission must never be lost over a label.
+  const firstTry: Record<string, unknown> = sourceDealId
+    ? intakeRow
+    : { ...intakeRow, engagement_type: "prospect" };
+  let { data, error } = await supabase.from("brands").insert(firstTry).select("id").single();
+  if (error && !sourceDealId && /enum|engagement_type/i.test(error.message)) {
+    ({ data, error } = await supabase.from("brands").insert(intakeRow).select("id").single());
+  }
 
   if (error || !data) {
     alertError({

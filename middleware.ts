@@ -17,6 +17,11 @@ const PUBLIC_PATHS = [
   // Dev/test endpoints — gated on a bearer token at the route level (the
   // service-role key), not via the team session.
   "/api/dev",
+  // Home-screen app manifest + icons (not sensitive; fetched without cookies).
+  "/manifest.webmanifest",
+  "/pwa-icon",
+  "/apple-icon",
+  "/icon",
 ];
 
 function isPublicPath(pathname: string): boolean {

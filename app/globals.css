@@ -28,17 +28,19 @@
     --muted: 40 12% 93%;
     --muted-foreground: 30 4% 42%;
 
-    /* Accent — violet/indigo for active tab + info banners */
-    --accent: 250 70% 65%;
-    --accent-foreground: 250 70% 20%;
-    --accent-soft: 250 70% 96%;
+    /* Accent — sharper amber/copper (#E88A3F). Richer than the pastel
+       brand peach but still on-brand, lets interactive elements and
+       chips actually pop against the ivory canvas. */
+    --accent: 24 78% 58%;
+    --accent-foreground: 22 50% 16%;
+    --accent-soft: 26 82% 93%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 36 14% 89%;
-    --input: 36 14% 89%;
-    --ring: 250 70% 65%;
+    --border: 34 12% 86%;
+    --input: 34 12% 86%;
+    --ring: 24 78% 58%;
 
     --radius: 0.75rem;
   }
@@ -67,5 +69,54 @@
   }
   .section-divider {
     @apply border-t border-border;
+  }
+}
+
+/* ── Phone / touch polish ─────────────────────────────────────────────────── */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* No 300ms tap delay, no accidental double-tap zoom on controls. */
+  a,
+  button,
+  select,
+  input,
+  textarea,
+  label,
+  summary,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+  /* iOS zooms the page when a focused field's text is under 16px. */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Horizontal chip rows that scroll without showing a scrollbar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Grow a small control's hit area to ~44px without changing its layout. */
+  .tap-target {
+    position: relative;
+  }
+  @media (pointer: coarse) {
+    .tap-target::after {
+      content: "";
+      position: absolute;
+      inset: -10px -6px;
+    }
   }
 }

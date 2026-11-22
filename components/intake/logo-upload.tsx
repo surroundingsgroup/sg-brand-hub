@@ -31,16 +31,29 @@ const REFERENCE_ACCEPT: Accept = {
   "application/zip": [".zip"],
 };
 
+// Max per-file size. The hard ceiling is set by the Supabase project's
+// global upload cap (50MB on this project — attempts to raise the bucket
+// above that are rejected by the storage service). Matching the client
+// limit means a client sees a friendly in-form error instead of a cryptic
+// storage 413 after waiting for the upload. For bigger files (video reels,
+// raw photo bundles) the form has a Dropbox / WeTransfer link field —
+// the rejected-file toast tells them to use it. Context: Simon Stewart
+// (Maritimo) hit this on 2026-10-14 trying to attach a reel MP4.
+const LOGO_MAX_SIZE = 25 * 1024 * 1024;
+const REFERENCE_MAX_SIZE = 50 * 1024 * 1024;
+
 export const LOGO_UPLOAD_DEFAULTS = {
   accept: LOGO_ACCEPT,
   placeholder: "Drop your logo files here or click to browse",
   helper: "PNG, SVG, EPS, AI — multiple files OK · up to 25MB each",
+  maxSize: LOGO_MAX_SIZE,
 };
 
 export const REFERENCE_UPLOAD_DEFAULTS = {
   accept: REFERENCE_ACCEPT,
   placeholder: "Drop your files here or click to browse",
-  helper: "PDF, DOC, DECK, PHOTOS, or VIDEO — multiple files OK · up to 25MB each",
+  helper: "PDF, DOC, DECK, PHOTOS, or VIDEO — multiple files OK · up to 50MB each (bigger? paste a Dropbox / WeTransfer link below)",
+  maxSize: REFERENCE_MAX_SIZE,
 };
 
 export function LogoUpload({
@@ -49,12 +62,14 @@ export function LogoUpload({
   accept = LOGO_ACCEPT,
   placeholder = LOGO_UPLOAD_DEFAULTS.placeholder,
   helper = LOGO_UPLOAD_DEFAULTS.helper,
+  maxSize = LOGO_MAX_SIZE,
 }: {
   value: StagedLogo[];
   onChange: (next: StagedLogo[]) => void;
   accept?: Accept;
   placeholder?: string;
   helper?: string;
+  maxSize?: number;
 }) {
   const [error, setError] = useState<string | null>(null);
 
@@ -68,12 +83,27 @@ export function LogoUpload({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const maxSizeMb = Math.round(maxSize / (1024 * 1024));
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept,
-    maxSize: 25 * 1024 * 1024, // 25MB per file
+    maxSize,
     onDropRejected: (rejections) => {
-      const reason = rejections[0]?.errors[0]?.message ?? "File rejected";
-      setError(reason);
+      // Build a friendly list of what failed and why. react-dropzone's
+      // default messages are terse ("File is larger than ..."); we rewrite
+      // the common ones so the client knows exactly what to do next.
+      const lines = rejections.map((r) => {
+        const code = r.errors[0]?.code;
+        const sizeMb = (r.file.size / (1024 * 1024)).toFixed(1);
+        if (code === "file-too-large") {
+          return `"${r.file.name}" (${sizeMb} MB) is bigger than our ${maxSizeMb} MB per-file limit — paste a Dropbox or WeTransfer link in the "Links to any other reference" field below instead.`;
+        }
+        if (code === "file-invalid-type") {
+          return `"${r.file.name}" isn't a supported file type.`;
+        }
+        return `"${r.file.name}": ${r.errors[0]?.message ?? "rejected"}`;
+      });
+      setError(lines.join(" "));
     },
     onDropAccepted: (files) => {
       setError(null);

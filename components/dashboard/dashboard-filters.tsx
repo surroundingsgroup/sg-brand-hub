@@ -18,6 +18,7 @@ const SORTS = [
 
 const ENGAGEMENTS = [
   { value: "all", label: "All engagements", Icon: Users },
+  { value: "prospect", label: "Prospect", Icon: Briefcase },
   { value: "retainer", label: "Retainer", Icon: Briefcase },
   { value: "project", label: "Non-Retainer", Icon: Briefcase },
   { value: "inactive", label: "Inactive", Icon: Briefcase },

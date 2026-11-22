@@ -1,14 +1,18 @@
 export type BrandStatus = "draft" | "submitted" | "in_review" | "approved" | "archived";
 
-export type EngagementType = "retainer" | "project" | "inactive";
+// Client lifecycle: prospect (pre-close — e.g. filled out the intake form
+// during the sales cycle) → retainer / project (on a Won deal) → inactive.
+export type EngagementType = "prospect" | "retainer" | "project" | "inactive";
 
 export const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
+  prospect: "Prospect",
   retainer: "Retainer",
   project: "Non-Retainer",
   inactive: "Inactive",
 };
 
 export const ENGAGEMENT_DESCRIPTIONS: Record<EngagementType, string> = {
+  prospect: "Pre-close — not a signed client yet",
   retainer: "Ongoing retainer client",
   project: "One-off / non-retainer project",
   inactive: "No longer active",
@@ -134,6 +138,23 @@ export type Brand = {
   fonts: BrandFont[];
 
   internal_notes: string | null;
+
+  /** Client-shared credentials, passwords, pre-docs. Plain text; the AM
+   *  edits this from the brand form. Not meant for high-sensitivity
+   *  secrets — it's where logins the client gave us live so the whole
+   *  team can find them on a sync call. */
+  client_documents: string | null;
+
+  /** Last Claude-generated industry update for this client's vertical.
+   *  Written by POST /api/brand/:id/industry-update. */
+  industry_update: {
+    generated_at: string;
+    items: Array<{
+      kind: "inspiration" | "competitor";
+      headline: string;
+      body: string;
+    }>;
+  } | null;
 
   ai_enriched_at: string | null;
   ai_enrichment_version: string | null;

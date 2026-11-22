@@ -80,3 +80,44 @@ export async function findAmByName(name: string | null | undefined): Promise<Tea
   const members = await fetchAccountManagers();
   return members.find((m) => m.name.trim().toLowerCase() === lower) ?? null;
 }
+
+/** Resolve the signed-in Hub user to their Monday team-member record by
+ *  email. Returns null if they aren't on the "Account Managers" team —
+ *  caller can fall back to the raw email in that case. Used by the
+ *  dashboard's "mine" filter to map user → canonical AM display name
+ *  that matches brand.account_manager. */
+export async function findAmByEmail(email: string | null | undefined): Promise<TeamMember | null> {
+  if (!email?.trim()) return null;
+  const lower = email.trim().toLowerCase();
+  const members = await fetchAccountManagers();
+  return members.find((m) => m.email?.trim().toLowerCase() === lower) ?? null;
+}
+
+// Full team roster — every member across every Monday team in the SG
+// workspace. Used by the Allocation editor's Owner dropdown so an AM
+// can assign a line to anyone on the team (not just AMs).
+let rosterCache: { at: number; members: TeamMember[] } | null = null;
+
+export async function fetchAllTeamMembers(): Promise<TeamMember[]> {
+  if (rosterCache && Date.now() - rosterCache.at < CACHE_TTL_MS) {
+    return rosterCache.members;
+  }
+  const data = await mondayFetch<{
+    teams: Array<{
+      users: Array<{ id: string; name: string; email: string | null }>;
+    }>;
+  }>(`query { teams { users { id name email } } }`);
+
+  const byId = new Map<string, TeamMember>();
+  for (const t of data.teams ?? []) {
+    for (const u of t.users ?? []) {
+      if (byId.has(u.id)) continue;
+      byId.set(u.id, { id: u.id, name: u.name, email: u.email });
+    }
+  }
+  const members = Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+  rosterCache = { at: Date.now(), members };
+  return members;
+}

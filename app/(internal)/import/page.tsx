@@ -2,7 +2,7 @@ import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { ImportUploader } from "./import-uploader";
 
-export const metadata = { title: "Bulk import — SG Brand Hub" };
+export const metadata = { title: "Bulk import — Hub" };
 
 export default function ImportPage() {
   return (

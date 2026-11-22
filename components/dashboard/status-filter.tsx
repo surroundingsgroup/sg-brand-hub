@@ -17,7 +17,7 @@ export function StatusFilter() {
   const current = searchParams.get("status") ?? "all";
 
   return (
-    <div className="flex items-center gap-6 border-b border-border">
+    <div className="no-scrollbar -mx-4 flex items-center gap-5 overflow-x-auto border-b border-border px-4 md:mx-0 md:gap-6 md:px-0">
       {OPTIONS.map((opt) => {
         const isActive = current === opt.value;
         const params = new URLSearchParams(searchParams);
@@ -28,13 +28,13 @@ export function StatusFilter() {
             key={opt.value}
             href={`?${params.toString()}`}
             className={cn(
-              "relative py-3 text-sm font-medium transition-colors",
+              "relative flex-shrink-0 whitespace-nowrap py-3 text-sm font-medium transition-colors",
               isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {opt.label}
             {isActive && (
-              <span className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-accent" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-accent" />
             )}
           </Link>
         );

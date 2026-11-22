@@ -11,7 +11,11 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn("inline-flex items-center gap-6 border-b border-transparent", className)}
+    // Phones: the tab row swipes sideways instead of pushing the page wider.
+    className={cn(
+      "no-scrollbar flex max-w-full items-center gap-6 overflow-x-auto overflow-y-hidden border-b border-transparent pb-px md:inline-flex md:overflow-visible md:pb-0",
+      className
+    )}
     {...props}
   />
 ));

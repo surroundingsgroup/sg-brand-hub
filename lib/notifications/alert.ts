@@ -60,7 +60,7 @@ export async function alertError(input: AlertInput): Promise<void> {
         cardId: `alert-${Date.now()}`,
         card: {
           header: {
-            title: `🚨 Brand Hub error — ${input.flow}`,
+            title: `🚨 Surroundings error — ${input.flow}`,
             subtitle: input.brandName ?? errMsg.slice(0, 80),
           },
           sections: [

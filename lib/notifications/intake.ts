@@ -75,7 +75,7 @@ async function sendGoogleChat(input: IntakeNotificationInput): Promise<void> {
                   buttonList: {
                     buttons: [
                       {
-                        text: "Review in Brand Hub →",
+                        text: "Review in Surroundings →",
                         onClick: { openLink: { url: brandUrl } },
                       },
                     ],
@@ -127,7 +127,7 @@ async function sendEmail(input: IntakeNotificationInput): Promise<void> {
   const html = `<!doctype html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f5f5f4; padding:32px; color:#2a2a2a;">
   <div style="max-width:560px; margin:0 auto; background:white; border-radius:12px; padding:32px; border:1px solid #e7e5e4;">
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:#a8a29e; margin-bottom:8px;">Surroundings Group · Brand Hub</div>
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:#a8a29e; margin-bottom:8px;">Surroundings</div>
     <h1 style="font-size:22px; margin:0 0 4px 0; font-weight:600;">🌟 New brand intake</h1>
     <h2 style="font-size:28px; margin:0 0 24px 0; font-weight:700; color:#1c1917;">${escapeHtml(input.businessName)}</h2>
 
@@ -137,10 +137,10 @@ async function sendEmail(input: IntakeNotificationInput): Promise<void> {
     <p>${input.hasColors ? "✅ Colors attached" : "⚠️ No colors attached — may need follow-up."}</p>
 
     <div style="margin-top:32px;">
-      <a href="${brandUrl}" style="display:inline-block; background:#6d28d9; color:white; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:500;">Review in Brand Hub →</a>
+      <a href="${brandUrl}" style="display:inline-block; background:#6d28d9; color:white; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:500;">Review in Surroundings →</a>
     </div>
 
-    <p style="margin-top:32px; font-size:12px; color:#a8a29e;">Sent automatically by SG Brand Hub. Reply directly to the submitter to follow up.</p>
+    <p style="margin-top:32px; font-size:12px; color:#a8a29e;">Sent automatically by Surroundings. Reply directly to the submitter to follow up.</p>
   </div>
 </body></html>`;
 

@@ -45,9 +45,9 @@ export function LoginCard({ error, next }: { error?: string; next?: string }) {
     <div className="panel w-full max-w-md p-10">
       <div className="flex flex-col items-center text-center">
         <Eyebrow>Surroundings Group</Eyebrow>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">SG Brand Hub</h1>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Surroundings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Internal brand intake & management for the SG team.
+          Your clients, your team, your processes.
         </p>
       </div>
 
