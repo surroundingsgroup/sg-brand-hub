@@ -38,6 +38,7 @@ export type HubSubitem = {
   status: string | null; // Task Status
   owner: string | null;
   due: string | null; // YYYY-MM-DD
+  dueTime?: string | null; // HH:MM, Tampa time, when the due date has one
   // The "Deliverable Link" on the sub-item: the actual file (Canva, Dropbox,
   // Frame...). Null until somebody has put the link on Monday.
   deliverableUrl: string | null;
@@ -181,6 +182,7 @@ export async function fetchProjectsForClient(
             status: sv("status2"),
             owner: sv("person"),
             due: sv("date__1")?.slice(0, 10) ?? null,
+            dueTime: sv("date__1")?.slice(11, 16) || null,
             deliverableUrl: (() => {
               // Only a real web address is ever used as a link.
               const url = parseLinkColumn(sub.column_values.find((c) => c.id === "link")?.value ?? null);

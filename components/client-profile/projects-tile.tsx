@@ -137,10 +137,73 @@ function RevisionLink({ url, revisions }: { url: string; revisions: number }) {
   );
 }
 
+// ── Creative brief review ───────────────────────────────────────────────────
+// Billy, 2026-11-23: every shoot gets a creative brief review with the AM and
+// the creators, done no later than 24 hours before the shoot. The Brief tool
+// keeps the Monday sub-item dated and owned (src/lib/brief-review.ts there);
+// here it shows on the project's own line while the shoot is ahead, so it is
+// seen without opening the row. It links to the sub-item on Monday, where it
+// is marked Completed.
+const REVIEW_URL = (id: string) => `https://nauticalnetwork.monday.com/boards/7006063086/pulses/${id}`;
+const isReviewSub = (s: HubSubitem) => (s.taskType ?? "").trim().toLowerCase() === "creative brief review" || /^creative brief review\b/i.test(s.name.trim());
+const isShootSub = (s: HubSubitem) => (s.taskType ?? "").trim().toLowerCase() === "content shoot";
+
+type ReviewState = { state: "done" | "open" | "soon" | "overdue" | "missing"; text: string; href: string | null; title: string };
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function clock(hhmm: string | null | undefined): string {
+  if (!hhmm) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  if (!Number.isFinite(h)) return "";
+  return ` ${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`;
+}
+
+function briefReviewFor(p: HubProject, today: string): ReviewState | null {
+  const subs = p.subitems ?? [];
+  const nextShoot = subs.filter(isShootSub).map((s) => s.due).filter((d): d is string => !!d && d >= today).sort()[0];
+  if (!nextShoot) return null; // only while a shoot is ahead
+  const reviews = subs.filter(isReviewSub);
+  const review = reviews.find((r) => !/^(completed|cache)$/i.test((r.status ?? "").trim())) ?? reviews[0];
+  if (!review) return { state: "missing", text: "No brief review yet", href: null, title: "The Brief tool adds one within a few hours, due 24 hours before the shoot" };
+  const who = review.owner ? `With ${review.owner}` : "No one assigned yet";
+  if (/^(completed|cache)$/i.test((review.status ?? "").trim())) return { state: "done", text: "Brief reviewed", href: REVIEW_URL(review.id), title: who };
+  if (!review.due) return { state: "open", text: "Brief review, no due date", href: REVIEW_URL(review.id), title: who };
+  const when = review.due === today ? `today${clock(review.dueTime)}` : review.due === addDays(today, 1) ? `tomorrow${clock(review.dueTime)}` : shortDate(review.due) ?? review.due;
+  if (review.due < today) return { state: "overdue", text: "Brief review overdue", href: REVIEW_URL(review.id), title: `${who}. Was due ${shortDate(review.due)}` };
+  return { state: review.due <= addDays(today, 1) ? "soon" : "open", text: `Brief review due ${when}`, href: REVIEW_URL(review.id), title: `${who}. Mark it Completed on Monday once it is done` };
+}
+
+const REVIEW_TONE: Record<ReviewState["state"], string> = {
+  done: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  open: "border-border bg-panel text-foreground/80",
+  soon: "border-amber-200 bg-amber-50 text-amber-900",
+  overdue: "border-red-200 bg-red-50 text-red-800",
+  missing: "border-amber-200 bg-amber-50 text-amber-900",
+};
+
+function BriefReviewChip({ review }: { review: ReviewState }) {
+  const cls = `inline-flex items-center rounded-full border px-1.5 py-px text-[10.5px] font-medium ${REVIEW_TONE[review.state]}`;
+  return review.href ? (
+    <a href={review.href} target="_blank" rel="noopener noreferrer" title={review.title} className={`${cls} hover:underline`}>
+      {review.text}
+    </a>
+  ) : (
+    <span title={review.title} className={cls}>
+      {review.text}
+    </span>
+  );
+}
+
 // ── Which sub-items show ─────────────────────────────────────────────────────
 // Billy, 2026-11-22: the list is for deliverables. Housekeeping steps (the
-// creative brief review, uploading and organizing footage) never show; the
-// content shoot does. And a deliverable shows once, as its newest version:
+// creative brief review, uploading and organizing footage) never show in it;
+// the content shoot does. The brief review has its own chip on the project
+// line instead (above). And a deliverable shows once, as its newest version:
 // "Main Video | 40 CC" and "Main Video | 40 CC (Revision 1 Internal)" are
 // one row that opens the latest file, not a row per draft.
 const HIDDEN_TASK_TYPES = new Set(["creative brief review", "project setup"]);
@@ -383,6 +446,7 @@ function ProjectLine({
   // The Brief Tool's own link when we have it; the link typed on Monday otherwise.
   const briefHref = brief?.url ?? p.briefUrl;
   const revisions = brief?.revision_count ?? 0;
+  const review = briefReviewFor(p, easternToday());
   return (
     <div className={`flex items-start justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-secondary/60${count ? " cursor-pointer" : ""}`}>
       <div className="min-w-0 flex-1">
@@ -401,6 +465,7 @@ function ProjectLine({
             <ProjectDateEditor brandId={brandId} projectId={p.id} projectName={p.name} currentIso={p.shootDateIso} />
           </span>
           {p.am ? <span>· {p.am}</span> : null}
+          {review ? <BriefReviewChip review={review} /> : null}
           {revisions > 0 ? <span>· {plural(revisions, "revision")}</span> : null}
           {p.dropboxUrl ? (
             <a

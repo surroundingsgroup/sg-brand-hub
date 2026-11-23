@@ -1,5 +1,6 @@
-// Time off balances, everyone: each person's PTO board on Monday next to the
-// checked number, and why they differ. Admin only, like the rest of Account
+// Time off balances, everyone: the number Surroundings works out for each
+// person (the individual Monday PTO boards were retired 2026-11-23; Monday's
+// copy is the PTO Balances board). Admin only, like the rest of Account
 // health (see ../layout.tsx). The request form itself is on /my/pto.
 
 import Link from "next/link";
@@ -10,6 +11,7 @@ import { RowFilter } from "@/components/shell/row-filter";
 import { buildPtoTeam, fetchPtoEntries, type ProfileRow } from "@/lib/pto/team";
 import { auditEveryone, fetchLedgers } from "@/lib/pto/ledgers";
 import { PTO_BOARD_URL } from "@/lib/monday/pto";
+import { PTO_BALANCES_URL } from "@/lib/pto/monday-board";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -24,7 +26,7 @@ export default async function PtoBalancesPage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Time off balances" description="Everyone's balance: what their PTO board on Monday says, next to the number checked against the policy and the approved requests." />
+      <PageHeader title="Time off balances" description="Everyone's balance, worked out from the policy and the approved requests. The same numbers are on the PTO Balances board on Monday." />
 
       <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
         <Link href="/my/pto" className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
@@ -32,6 +34,9 @@ export default async function PtoBalancesPage() {
         </Link>
         <a href={PTO_BOARD_URL} target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
           Time Off Request board
+        </a>
+        <a href={PTO_BALANCES_URL} target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+          PTO Balances board
         </a>
         <Link href="/accounts" className="ml-auto text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
           Account health
@@ -42,8 +47,7 @@ export default async function PtoBalancesPage() {
         <p className="text-[13px] text-muted-foreground">The time-off boards on Monday could not be read just now. Reload in a moment.</p>
       ) : (
         <>
-          {!ledgers.ok ? <p className="mb-4 text-[12.5px] text-amber-700">The individual PTO boards could not be read just now, so only the start-date math is shown.</p> : null}
-          <RowFilter scope="pto" placeholder="Search people" groups={[{ key: "board", label: "Monday board", options: [{ value: "differs", label: "Differs" }, { value: "matches", label: "Matches" }] }]} />
+          <RowFilter scope="pto" placeholder="Search people" />
           <PtoBalances people={team.people} audits={audits} unmatched={team.unmatched} everyone asOf={today} />
         </>
       )}

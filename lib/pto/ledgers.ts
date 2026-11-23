@@ -1,33 +1,35 @@
 // The individual "<Name> PTO" boards on Monday: one board per person, kept as
 // a ledger. Each row is hours in (Accrual), hours out (Usage) or a Roll Over
-// Adj, and the board adds them up. Most were opened in October 2025 with an
-// "Initial Load In" row, which is the known balance on that day.
+// Adj. Most were opened in October 2025 with an "Initial Load In" row, which
+// is the known balance on that day.
 //
-// This file reads those boards and checks each one against the policy:
-//   - one accrual per pay period (the boards credit on the 15th and the 28th),
-//     so a second automation adding time shows up as extra rows
-//   - the amount per pay period against the person's start date
-//   - every approved request since the board was opened against the Usage rows
+// RETIRED 2026-11-23 (Billy: "you decide which board we should work off").
+// Their rows were copied into ledger-snapshot.json that day and are read from
+// there, so the boards can be archived without changing anyone's number. From
+// then on the balance moves only by the policy (accrual by start date, 40-hour
+// cap on the anniversary) and the approved requests on the Time Off Request
+// board. Monday's copy of every balance is the PTO Balances board
+// (./monday-board.ts), written daily.
+//
+// The check, per person:
+//   - opening balance (the "Initial Load In" row, or 0 for a 2026 hire)
+//   - what the policy gives each pay period (the 15th and the 28th)
+//   - every approved request, matched to the board's Usage rows up to the snapshot
 //   - the 40-hour cap at each work anniversary
-//
-// "Board says" is what the board adds up to. "Checked" is the opening balance
-// plus what the policy gives, minus approved time off, with the cap applied.
 // Nothing here writes to Monday.
 
 import { addYears, allotmentHours, PTO_POLICY } from "./policy";
 import { countsAsUsed, isFormerTeam, isNotTracked, normName, sameRequester, type PtoEntry } from "./team";
+import SNAPSHOT from "./ledger-snapshot.json";
 
-const API = "https://api.monday.com/v2";
-
-/** One board per person. Add a line when a board is made for a new hire. */
-// `start` is only for someone with no team profile yet; a profile's start date wins.
+/** The retired boards (ids kept for the record; Sam's start date sits here too). */
 export const PTO_LEDGER_BOARDS: { board: string; person: string; start?: string }[] = [
   { board: "18117844636", person: "Morgan Finger" },
   { board: "18117846712", person: "Austin Tompkins" },
   { board: "18117848444", person: "Sean O'Donnell" },
   { board: "18117851700", person: "Granger Smith" },
   { board: "18117859216", person: "Phallon Ray" },
-  // Noah Rahman's board (18117861722) is left out: no longer on the team full time.
+  // Noah Rahman's board (18117861722) was archived 2026-11-23: no longer on the team full time.
   { board: "18396659889", person: "Tiffany Lewis" },
   { board: "18396660030", person: "Samuel Ray", start: "2026-01-05" },
   { board: "18401392159", person: "Kyle Daniels" },
@@ -35,8 +37,6 @@ export const PTO_LEDGER_BOARDS: { board: string; person: string; start?: string 
   { board: "18412654732", person: "Nick Nunez" },
   { board: "18417418293", person: "Joaley Da Silva" },
 ];
-
-const COL = { date: "date4", accrual: "numeric_mkvd4tn", usage: "numeric_mkvdxt9b", adjust: "numeric_mkvdx5n8" } as const;
 
 export type LedgerRow = {
   id: string;
@@ -49,53 +49,15 @@ export type LedgerRow = {
   adjust: number;
 };
 
-export type Ledger = { board: string; person: string; url: string; rows: LedgerRow[] };
+/** `retired`: read from the frozen copy, so there is no live board to compare with. */
+export type Ledger = { board: string; person: string; url: string; rows: LedgerRow[]; retired?: boolean };
 
-type RawItem = { id: string; name: string; created_at: string | null; group: { title: string }; column_values: { id: string; text: string | null }[] };
+/** The day the boards were copied. */
+export const LEDGERS_FROZEN_ON: string = (SNAPSHOT as { takenOn: string }).takenOn;
 
 export async function fetchLedgers(): Promise<{ ok: boolean; ledgers: Ledger[] }> {
-  const token = process.env.MONDAY_API_TOKEN;
-  if (!token) return { ok: false, ledgers: [] };
-  const read = async (ids: string[]): Promise<Ledger[]> => {
-    const res = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: token, "API-Version": "2025-04" },
-      body: JSON.stringify({
-        query: `query($b:[ID!]){ boards(ids:$b){ id items_page(limit:500){ items{ id name created_at group{ title } column_values(ids:${JSON.stringify(Object.values(COL))}){ id text } } } } }`,
-        variables: { b: ids },
-      }),
-      next: { revalidate: 300 },
-    });
-    const json = (await res.json()) as { data?: { boards: { id: string; items_page: { items: RawItem[] } }[] }; errors?: { message: string }[] };
-    if (json.errors?.length || !json.data) throw new Error(json.errors?.map((e) => e.message).join("; ") ?? `HTTP ${res.status}`);
-    return json.data.boards.map((b) => ({
-      board: String(b.id),
-      person: PTO_LEDGER_BOARDS.find((x) => x.board === String(b.id))?.person ?? "",
-      url: `https://nauticalnetwork.monday.com/boards/${b.id}`,
-      rows: b.items_page.items.map((it) => {
-        const v = (id: string) => (it.column_values.find((c) => c.id === id)?.text ?? "").trim();
-        return {
-          id: String(it.id),
-          name: it.name.trim(),
-          group: it.group.title,
-          date: v(COL.date).slice(0, 10) || null,
-          created: (it.created_at ?? "").slice(0, 10),
-          accrual: Number(v(COL.accrual)) || 0,
-          usage: Number(v(COL.usage)) || 0,
-          adjust: Number(v(COL.adjust)) || 0,
-        };
-      }),
-    }));
-  };
-  try {
-    const ids = PTO_LEDGER_BOARDS.map((x) => x.board);
-    const chunks: string[][] = [];
-    for (let i = 0; i < ids.length; i += 4) chunks.push(ids.slice(i, i + 4));
-    const ledgers = (await Promise.all(chunks.map(read))).flat();
-    return { ok: true, ledgers };
-  } catch {
-    return { ok: false, ledgers: [] };
-  }
+  const ledgers = (SNAPSHOT as { ledgers: Ledger[] }).ledgers.map((l) => ({ ...l, retired: true }));
+  return { ok: true, ledgers };
 }
 
 // ---------------------------------------------------------------- the check
@@ -166,7 +128,7 @@ export function auditLedger(
   capRule: CapRule = "anniversary",
   opts: { opening?: { date: string; hours: number } } = {}
 ): LedgerAudit {
-  const hasBoard = !!ledger.board;
+  const hasBoard = !!ledger.board && !ledger.retired;
   const today = asOf.slice(0, 10);
   const start = startDate?.slice(0, 10) || null;
   const reasons: { text: string; hours: number }[] = [];

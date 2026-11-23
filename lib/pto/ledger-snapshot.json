@@ -1,0 +1,2902 @@
+{
+ "takenOn": "2026-11-23",
+ "ledgers": [
+  {
+   "board": "18117851700",
+   "person": "Granger Smith",
+   "url": "https://nauticalnetwork.monday.com/boards/18117851700",
+   "rows": [
+    {
+     "id": "18130521372",
+     "name": "Initial Load In",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-10-07",
+     "accrual": 34.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381636657",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-15",
+     "created": "2025-11-17",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381636749",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-31",
+     "created": "2025-11-17",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381636780",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-15",
+     "created": "2025-11-17",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "10682348684",
+     "name": "Granger Smith",
+     "group": "PTO",
+     "date": "2025-12-01",
+     "created": "2025-12-02",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "11092984894",
+     "name": "Granger Smith",
+     "group": "PTO",
+     "date": "2026-01-21",
+     "created": "2026-01-25",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "11092980462",
+     "name": "Granger Smith",
+     "group": "PTO",
+     "date": "2026-01-21",
+     "created": "2026-01-25",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "11127284763",
+     "name": "Granger Smith",
+     "group": "PTO",
+     "date": "2026-01-28",
+     "created": "2026-01-29",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "11490173414",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-30",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490147993",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-12-15",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490153676",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-12-31",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490236431",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-15",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490236716",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-31",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490170529",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-15",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490236689",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510282107",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619117012",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755211727",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11808295586",
+     "name": "Granger Smith",
+     "group": "PTO",
+     "date": "2026-04-17",
+     "created": "2026-04-21",
+     "accrual": 0,
+     "usage": 32,
+     "adjust": 0
+    },
+    {
+     "id": "11866403352",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020486175",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126004759",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277637304",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12351683550",
+     "name": "Granger Smith",
+     "group": "PTO",
+     "date": "2026-06-23",
+     "created": "2026-06-23",
+     "accrual": 0,
+     "usage": 40,
+     "adjust": 0
+    },
+    {
+     "id": "12389942049",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538465256",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12642687543",
+     "name": "Granger",
+     "group": "PTO",
+     "date": "2026-07-16",
+     "created": "2026-07-27",
+     "accrual": 0,
+     "usage": 4,
+     "adjust": 0
+    },
+    {
+     "id": "12648123671",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811419517",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12919960355",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12930388717",
+     "name": "Granger",
+     "group": "PTO",
+     "date": "2026-08-30",
+     "created": "2026-08-30",
+     "accrual": 0,
+     "usage": 4,
+     "adjust": 0
+    },
+    {
+     "id": "12930497382",
+     "name": "Granger",
+     "group": "PTO",
+     "date": "2026-08-30",
+     "created": "2026-08-30",
+     "accrual": 0,
+     "usage": 24,
+     "adjust": 0
+    },
+    {
+     "id": "13048495210",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13146071327",
+     "name": "Granger",
+     "group": "PTO",
+     "date": "2026-09-25",
+     "created": "2026-09-28",
+     "accrual": 0,
+     "usage": 4,
+     "adjust": 0
+    },
+    {
+     "id": "13148334808",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13185531212",
+     "name": "Manual Time Addition for canceled 9/2 Request",
+     "group": "PTO",
+     "date": "2026-10-01",
+     "created": "2026-10-01",
+     "accrual": 4,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298317321",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404886490",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13499300130",
+     "name": "Granger",
+     "group": "PTO",
+     "date": "2026-11-04",
+     "created": "2026-11-08",
+     "accrual": 0,
+     "usage": 24,
+     "adjust": 0
+    },
+    {
+     "id": "13553214977",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18117848444",
+   "person": "Sean O'Donnell",
+   "url": "https://nauticalnetwork.monday.com/boards/18117848444",
+   "rows": [
+    {
+     "id": "18130566075",
+     "name": "Initial Load In",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-10-07",
+     "accrual": 144,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18343443771",
+     "name": "Sean",
+     "group": "PTO",
+     "date": "2025-10-07",
+     "created": "2025-11-04",
+     "accrual": 0,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381644238",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-15",
+     "created": "2025-11-17",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381644301",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-31",
+     "created": "2025-11-17",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381644342",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-15",
+     "created": "2025-11-17",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490253852",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-30",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490253563",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-12-15",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490253566",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-12-31",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490261173",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-15",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490277987",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-31",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490275971",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-15",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490273009",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510301995",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619132677",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755286365",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11866485002",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020581869",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126084395",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277758937",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390061577",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538632953",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648186973",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811492882",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920037250",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048599122",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148391458",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298399904",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404972055",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553284345",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 6.67,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18117846712",
+   "person": "Austin Tompkins",
+   "url": "https://nauticalnetwork.monday.com/boards/18117846712",
+   "rows": [
+    {
+     "id": "18117886691",
+     "name": "Initial Load In",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-10-06",
+     "accrual": 41.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18130480738",
+     "name": "Austin",
+     "group": "PTO",
+     "date": "2025-10-02",
+     "created": "2025-10-07",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "18381627990",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-15",
+     "created": "2025-11-17",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381628091",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-31",
+     "created": "2025-11-17",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381628136",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-15",
+     "created": "2025-11-17",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "10587456289",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2025-11-14",
+     "created": "2025-11-18",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "10658215009",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-11-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "10775928462",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-12-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "10790475350",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2025-12-06",
+     "created": "2025-12-16",
+     "accrual": 0,
+     "usage": 24,
+     "adjust": 0
+    },
+    {
+     "id": "10790477571",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2025-12-06",
+     "created": "2025-12-16",
+     "accrual": 0,
+     "usage": 32,
+     "adjust": 0
+    },
+    {
+     "id": "10860509121",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-12-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11009723336",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2026-01-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11119035722",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2026-01-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11279460752",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2026-02-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11280268565",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-01-25",
+     "created": "2026-02-15",
+     "accrual": 0,
+     "usage": 4,
+     "adjust": 0
+    },
+    {
+     "id": "11392073799",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": null,
+     "created": "2026-02-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510355738",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619162158",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11638077366",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-03-12",
+     "created": "2026-03-31",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "11755508596",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11816486173",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-04-03",
+     "created": "2026-04-22",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "11816483834",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-04-08",
+     "created": "2026-04-22",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "11866694538",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020786930",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12105044120",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-05-10",
+     "created": "2026-05-26",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "12104977071",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-05-21",
+     "created": "2026-05-26",
+     "accrual": 0,
+     "usage": 40,
+     "adjust": 0
+    },
+    {
+     "id": "12104976736",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-05-21",
+     "created": "2026-05-26",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "12126339357",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12278087718",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390249323",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538888403",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648458183",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12762193840",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-07-27",
+     "created": "2026-08-10",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "12811673633",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920245222",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048818834",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148653314",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298627960",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13405193958",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553312159",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13559745230",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-11-02",
+     "created": "2026-11-16",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "13559784079",
+     "name": "Austin Tompkins",
+     "group": "PTO",
+     "date": "2026-11-02",
+     "created": "2026-11-16",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18117844636",
+   "person": "Morgan Finger",
+   "url": "https://nauticalnetwork.monday.com/boards/18117844636",
+   "rows": [
+    {
+     "id": "18130549979",
+     "name": "Initial Load In",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-10-07",
+     "accrual": 131.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18358181444",
+     "name": "Morgan Finger",
+     "group": "PTO",
+     "date": "2025-11-05",
+     "created": "2025-11-05",
+     "accrual": 0,
+     "usage": 4,
+     "adjust": 0
+    },
+    {
+     "id": "18381641188",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-15",
+     "created": "2025-11-17",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381641252",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-31",
+     "created": "2025-11-17",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381641298",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-15",
+     "created": "2025-11-17",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490207884",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-11-30",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490208198",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-12-15",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490200168",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-12-31",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490217623",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-15",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490208371",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-31",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490222473",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-15",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490217221",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510296491",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619137777",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755290667",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11866533534",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020630138",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126107924",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277724285",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390033552",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538666996",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648245458",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811478702",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920005064",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048590880",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148400631",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298388521",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404988608",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553264090",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 6,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18401392159",
+   "person": "Kyle Daniels",
+   "url": "https://nauticalnetwork.monday.com/boards/18401392159",
+   "rows": [
+    {
+     "id": "11490333224",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510296445",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619124251",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755296887",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11866541067",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020573133",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126107684",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277719035",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390033622",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12530289435",
+     "name": "kyle daniels",
+     "group": "PTO",
+     "date": "2026-07-14",
+     "created": "2026-07-14",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "12538645563",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12592981758",
+     "name": "kyle daniels",
+     "group": "PTO",
+     "date": "2026-07-19",
+     "created": "2026-07-21",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "12641681392",
+     "name": "kyle daniels",
+     "group": "PTO",
+     "date": "2026-07-24",
+     "created": "2026-07-27",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "12648245882",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811507745",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920056736",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048546010",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148391454",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298350668",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404991650",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13460623857",
+     "name": "kyle daniels",
+     "group": "PTO",
+     "date": "2026-11-03",
+     "created": "2026-11-04",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "13460631461",
+     "name": "kyle daniels",
+     "group": "PTO",
+     "date": "2026-11-03",
+     "created": "2026-11-04",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "13553284241",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18396660030",
+   "person": "Samuel Ray",
+   "url": "https://nauticalnetwork.monday.com/boards/18396660030",
+   "rows": [
+    {
+     "id": "11490366780",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-15",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490317692",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-31",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490366887",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-15",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490367286",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510292510",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619137829",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755311738",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11866542588",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020581789",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126071810",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277739742",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390033597",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538668381",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648204858",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811616047",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920056307",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048597459",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148400577",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298350653",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404970522",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553284693",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18396659889",
+   "person": "Tiffany Lewis",
+   "url": "https://nauticalnetwork.monday.com/boards/18396659889",
+   "rows": [
+    {
+     "id": "11490295471",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-31",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490304511",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-15",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490304513",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510304433",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619130749",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755286131",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11866449376",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11883636042",
+     "name": "Tiffany Lewis",
+     "group": "PTO",
+     "date": "2026-04-29",
+     "created": "2026-04-29",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "12020601504",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126073212",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277722270",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390081763",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538604966",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12540098757",
+     "name": "Tiffany lewis",
+     "group": "PTO",
+     "date": "2026-07-14",
+     "created": "2026-07-15",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "12648218151",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811492885",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920025870",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048603177",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148410322",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13260929266",
+     "name": "Tiffany Lewis",
+     "group": "PTO",
+     "date": "2026-10-08",
+     "created": "2026-10-11",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "13298415105",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13405000549",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553262159",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18117859216",
+   "person": "Phallon Ray",
+   "url": "https://nauticalnetwork.monday.com/boards/18117859216",
+   "rows": [
+    {
+     "id": "18130560377",
+     "name": "Initial Load In",
+     "group": "PTO",
+     "date": null,
+     "created": "2025-10-07",
+     "accrual": 61.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381643186",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-15",
+     "created": "2025-11-17",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381643216",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-10-31",
+     "created": "2025-11-17",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "18381643243",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-15",
+     "created": "2025-11-17",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "10790449679",
+     "name": "Phallon Ray",
+     "group": "PTO",
+     "date": "2025-12-04",
+     "created": "2025-12-16",
+     "accrual": 0,
+     "usage": 24,
+     "adjust": 0
+    },
+    {
+     "id": "10790451656",
+     "name": "Phallon",
+     "group": "PTO",
+     "date": "2025-12-04",
+     "created": "2025-12-16",
+     "accrual": 0,
+     "usage": 26,
+     "adjust": 0
+    },
+    {
+     "id": "11490234118",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-11-30",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490234120",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-12-15",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490234808",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2025-12-31",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490220665",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-15",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490220744",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-01-31",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490253834",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-15",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11490234651",
+     "name": "Accrual",
+     "group": "PTO",
+     "date": "2026-02-28",
+     "created": "2026-03-12",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11510301933",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-15",
+     "created": "2026-03-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11619121874",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-03-28",
+     "created": "2026-03-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11755286047",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-15",
+     "created": "2026-04-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "11816445722",
+     "name": "Phallon Ray",
+     "group": "PTO",
+     "date": "2026-04-20",
+     "created": "2026-04-22",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "11816465005",
+     "name": "Phallon Ray",
+     "group": "PTO",
+     "date": "2026-04-20",
+     "created": "2026-04-22",
+     "accrual": 0,
+     "usage": 16,
+     "adjust": 0
+    },
+    {
+     "id": "11866531708",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-04-28",
+     "created": "2026-04-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12020564982",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126127049",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277713236",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12389967543",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538632367",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648189511",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12803622525",
+     "name": "Phallon Ray",
+     "group": "PTO",
+     "date": "2026-08-13",
+     "created": "2026-08-14",
+     "accrual": 0,
+     "usage": 3,
+     "adjust": 0
+    },
+    {
+     "id": "12811541765",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920046208",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048604780",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148367806",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13165844756",
+     "name": "Phallon Ray",
+     "group": "PTO",
+     "date": "2026-09-01",
+     "created": "2026-09-29",
+     "accrual": 0,
+     "usage": 32,
+     "adjust": 0
+    },
+    {
+     "id": "13165831482",
+     "name": "Phallon Ray",
+     "group": "PTO",
+     "date": "2026-09-01",
+     "created": "2026-09-29",
+     "accrual": 0,
+     "usage": 8,
+     "adjust": 0
+    },
+    {
+     "id": "13298419386",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404999805",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553275084",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 5.33,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18417418293",
+   "person": "Joaley Da Silva",
+   "url": "https://nauticalnetwork.monday.com/boards/18417418293",
+   "rows": [
+    {
+     "id": "12277759652",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12389937771",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538632656",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648228643",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811626206",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920025868",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048608598",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148477993",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298394798",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404970783",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13443674789",
+     "name": "Jo Da Silva",
+     "group": "PTO",
+     "date": "2026-10-20",
+     "created": "2026-11-02",
+     "accrual": 0,
+     "usage": 32,
+     "adjust": 0
+    },
+    {
+     "id": "13553264329",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18412654732",
+   "person": "Nick Nunez",
+   "url": "https://nauticalnetwork.monday.com/boards/18412654732",
+   "rows": [
+    {
+     "id": "12020582484",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126111471",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277758757",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12389967643",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538599687",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648204749",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811492723",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920049013",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048609290",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148478461",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298387958",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404997795",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553246645",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13619666314",
+     "name": "Nick Nunez",
+     "group": "PTO",
+     "date": "2026-09-03",
+     "created": "2026-11-23",
+     "accrual": 0,
+     "usage": 40,
+     "adjust": 0
+    }
+   ]
+  },
+  {
+   "board": "18411527478",
+   "person": "Kamila Bacha",
+   "url": "https://nauticalnetwork.monday.com/boards/18411527478",
+   "rows": [
+    {
+     "id": "12020564318",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-15",
+     "created": "2026-05-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12126077903",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-05-28",
+     "created": "2026-05-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12277718887",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-15",
+     "created": "2026-06-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12390104053",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-06-28",
+     "created": "2026-06-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12538619382",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-15",
+     "created": "2026-07-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12648187292",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-07-28",
+     "created": "2026-07-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12811478778",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-15",
+     "created": "2026-08-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "12920037990",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-08-28",
+     "created": "2026-08-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13048603900",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-15",
+     "created": "2026-09-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13148367568",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-09-28",
+     "created": "2026-09-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13298379613",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-15",
+     "created": "2026-10-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13404972357",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-10-28",
+     "created": "2026-10-28",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13553275363",
+     "name": "PTO Accrual",
+     "group": "PTO",
+     "date": "2026-11-15",
+     "created": "2026-11-15",
+     "accrual": 4.67,
+     "usage": 0,
+     "adjust": 0
+    },
+    {
+     "id": "13619666853",
+     "name": "Kamila Bacha",
+     "group": "PTO",
+     "date": "2026-08-17",
+     "created": "2026-11-23",
+     "accrual": 0,
+     "usage": 24,
+     "adjust": 0
+    }
+   ]
+  }
+ ]
+}

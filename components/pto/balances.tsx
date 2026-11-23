@@ -1,10 +1,11 @@
 // PTO balances for the Time off page: whoever the viewer is allowed to see
 // (themselves, their team, or everyone).
 //
-// People with their own PTO board on Monday come first: what the board adds
-// up to, next to the checked number (opening balance, plus what the policy
-// gives, minus approved time off, with the 40-hour cap), and the reasons the
-// two differ. People with no board are worked out from their start date alone.
+// Everyone with a worked-out balance (opening balance, plus what the policy
+// gives, minus approved time off, with the 40-hour cap). The board columns
+// ("Board says", "Difference", the reasons) only show while a live PTO board
+// is being compared; the individual boards were retired 2026-11-23, so today
+// they stay hidden. People with no opening are worked out from their start date alone.
 
 import { PTO_POLICY } from "@/lib/pto/policy";
 import { isNotTracked, type PtoPerson } from "@/lib/pto/team";
@@ -42,6 +43,8 @@ export function PtoBalances({
   const off = audits.filter((a) => a.hasBoard && Math.abs(a.difference) >= 0.1);
   const match = audits.filter((a) => a.hasBoard && Math.abs(a.difference) < 0.1);
   const lostTotal = audits.reduce((n, a) => n + a.lostToCap, 0);
+  // Board columns only while there is a live board to compare with.
+  const boards = everyone && audits.some((a) => a.hasBoard);
 
   return (
     <section className="mb-6 rounded-2xl border border-border/70 bg-panel p-5">
@@ -65,9 +68,9 @@ export function PtoBalances({
                   <th className="sticky top-12 z-10 bg-panel md:top-14 py-2 pr-3">Person</th>
                   <th className="sticky top-12 z-10 bg-panel md:top-14 px-3 py-2">Started</th>
                   <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Per pay period</th>
-                  {everyone ? <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Board says</th> : null}
+                  {boards ? <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Board says</th> : null}
                   <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>{everyone ? "Checked" : "Balance"}</th>
-                  {everyone ? <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Difference</th> : null}
+                  {boards ? <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Difference</th> : null}
                   {everyone ? <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Lost to the cap</th> : null}
                   <th className={cn(TH, "sticky top-12 z-10 bg-panel md:top-14")}>Booked ahead</th>
                   <th className="sticky top-12 z-10 bg-panel md:top-14 py-2 pl-3 text-right">At risk on anniversary</th>
@@ -88,11 +91,11 @@ export function PtoBalances({
                     <td className="px-3 py-2 text-muted-foreground">{a.startDate ? date(a.startDate) : "not on file"}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {(a.policyRate ?? a.boardRate).toFixed(2)}
-                      {everyone && a.policyRate != null && Math.abs(a.policyRate - a.boardRate) >= 0.05 ? <span className="ml-1 text-[10.5px] text-amber-700">board {a.boardRate.toFixed(2)}</span> : null}
+                      {boards && a.hasBoard && a.policyRate != null && Math.abs(a.policyRate - a.boardRate) >= 0.05 ? <span className="ml-1 text-[10.5px] text-amber-700">board {a.boardRate.toFixed(2)}</span> : null}
                     </td>
-                    {everyone ? <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{a.hasBoard ? h(a.boardBalance) : "no board"}</td> : null}
+                    {boards ? <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{a.hasBoard ? h(a.boardBalance) : "no board"}</td> : null}
                     <td className={cn("px-3 py-2 text-right font-bold tabular-nums", a.checked < 0 ? "text-red-700" : "text-foreground")}>{h(a.checked)}</td>
-                    {everyone ? (
+                    {boards ? (
                       <td className={cn("px-3 py-2 text-right tabular-nums", a.hasBoard && Math.abs(a.difference) >= 0.1 ? "text-amber-700" : "text-muted-foreground")}>{!a.hasBoard ? "" : Math.abs(a.difference) >= 0.1 ? signed(a.difference) : "matches"}</td>
                     ) : null}
                     {everyone ? <td className="px-3 py-2 text-right tabular-nums">{a.lostToCap ? h(a.lostToCap) : ""}</td> : null}
@@ -106,9 +109,11 @@ export function PtoBalances({
             </table>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            {everyone
+            {boards
               ? "Board says is what each person's PTO board on Monday adds up to. Checked starts from the board's opening balance, adds what the policy gives each pay period, takes off every approved request, and applies the cap at each anniversary. Both already have booked time off taken out."
-              : "Each balance already has booked time off taken out."}
+              : everyone
+                ? "Each balance starts from the person's opening balance (the October 2025 load-in, or zero for a 2026 hire), adds what the policy gives each pay period, takes off every approved request, and applies the cap on each anniversary. Booked time off is already taken out. The same numbers are on the PTO Balances board on Monday, updated every morning."
+                : "Each balance already has booked time off taken out."}
           </p>
 
           {everyone && off.length ? (
