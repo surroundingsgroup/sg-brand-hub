@@ -25,9 +25,11 @@ import {
   UserRound,
   Users,
   X,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, initials } from "@/lib/utils";
+import { ThemeRow } from "@/components/shell/theme-toggle";
 import { ENGAGEMENT_LABELS, type EngagementType } from "@/types/brand";
 import { listClientIndex, type ClientIndexRow } from "@/app/(internal)/shell-actions";
 
@@ -281,7 +283,7 @@ function Tab({
   );
 }
 
-export function MobileTabBar({ email }: { email: string }) {
+export function MobileTabBar({ email, admin = false }: { email: string; admin?: boolean }) {
   const pathname = usePathname();
   const [sheet, setSheet] = useState<null | "search" | "create" | "me">(null);
   const close = () => setSheet(null);
@@ -388,7 +390,11 @@ export function MobileTabBar({ email }: { email: string }) {
             </span>
           </div>
           <SheetRow icon={<UserRound className="h-5 w-5" />} label="Edit your profile" href="/my/profile" onClick={close} />
+          {admin ? (
+            <SheetRow icon={<Activity className="h-5 w-5" />} label="Account health" hint="Contract pace and renewals, all clients" href="/accounts" onClick={close} />
+          ) : null}
           <SheetRow icon={<Users className="h-5 w-5" />} label="Team directory" href="/my/team" onClick={close} />
+          <ThemeRow />
           <form action="/auth/signout" method="post">
             <button type="submit" className="flex min-h-[60px] w-full items-center gap-3 px-5 py-2.5 active:bg-secondary">
               <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">

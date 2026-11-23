@@ -22,6 +22,7 @@ import {
   TrendingDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { money, rateMath, rateTone } from "@/lib/allocations/rate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,8 +72,11 @@ export function AllocationEditor({
   submittedAt,
   templateTotal,
   templateFound,
+  startedFrom = null,
   recentMonths,
   teamMembers,
+  monthly = null,
+  targetRate = 150,
 }: {
   brandId: string;
   brandName: string;
@@ -84,8 +88,13 @@ export function AllocationEditor({
   submittedAt: string | null;
   templateTotal: number;
   templateFound: boolean;
+  /** "Copied from Oct 2026" / "Standard starting rows": what a new month was pre-filled from. */
+  startedFrom?: string | null;
   recentMonths: RecentMonth[];
   teamMembers: string[];
+  /** What the client pays a month, and the company's target rate, for the two rate numbers. */
+  monthly?: number | null;
+  targetRate?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -101,6 +110,9 @@ export function AllocationEditor({
     [lines]
   );
   const delta = total - templateTotal;
+  // Real rate and what these hours should bill at the target, live as hours change.
+  const math = rateMath(monthly, total, targetRate);
+  const rate = rateTone(math.realRate, targetRate);
 
   const period = { year, month };
   const daysToDue = daysUntilDue(period);
@@ -206,12 +218,12 @@ export function AllocationEditor({
       </div>
 
       {/* At-a-glance tiles: planned, template, delta, 3 recent */}
-      <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile label="Planned" value={`${total.toFixed(1)}h`} emphasis />
         <StatTile
           label="Template"
           value={templateFound ? `${templateTotal.toFixed(1)}h` : "—"}
-          sub={templateFound ? "Monday setup" : "No template"}
+          sub={startedFrom ?? (templateFound ? "Monday setup" : "No template")}
         />
         <StatTile
           label="Delta"
@@ -256,6 +268,36 @@ export function AllocationEditor({
                   .map((m) => `${periodShort({ year: m.year, month: m.month }).split(" ")[0]} ${Number(m.total_hours).toFixed(0)}h`)
                   .join(" · ")
           }
+        />
+      </div>
+
+      {/* What these hours are worth: the real rate, and what they should bill at the target */}
+      <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatTile label="They pay a month" value={math.monthly != null ? money(math.monthly) : "—"} sub={math.monthly != null ? undefined : "Add it under Scope, Commercials"} />
+        <StatTile
+          label="Real effective rate"
+          value={math.realRate != null ? `$${math.realRate.toFixed(2)}` : "—"}
+          sub={math.realRate != null ? "an hour, at the hours planned" : math.monthly != null ? "Add hours to see it" : undefined}
+          tone={rate === "good" ? "ok" : rate === "watch" || rate === "low" ? "warn" : "muted"}
+        />
+        <StatTile
+          label={`Should bill at $${targetRate} an hour`}
+          value={math.atTarget != null ? money(math.atTarget) : "—"}
+          sub={
+            math.gap == null
+              ? undefined
+              : math.gap < 0
+                ? `${money(-math.gap)} more than they pay`
+                : math.gap > 0
+                  ? `${money(math.gap)} less than they pay`
+                  : "the same as they pay"
+          }
+          tone={math.gap != null && math.gap < 0 ? "warn" : "default"}
+        />
+        <StatTile
+          label="Hours the amount buys"
+          value={math.budgetHours != null ? `${math.budgetHours.toFixed(1)}h` : "—"}
+          sub={math.budgetHours != null ? `at $${targetRate} an hour` : undefined}
         />
       </div>
 

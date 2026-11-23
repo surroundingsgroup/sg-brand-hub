@@ -41,13 +41,14 @@ export function Tile({
       data-tile-label={label}
       className={cn(
         // Base: white panel, hairline border, subtle lift shadow.
-        "group/tile relative flex flex-col rounded-2xl border border-border/60 bg-panel p-4 md:p-6",
+        // tile-glow (globals.css): a soft stone gradient washes in on hover.
+        "group/tile tile-glow relative flex flex-col rounded-2xl border border-border/60 bg-panel p-4 md:p-6",
         // Jump target for the phone section bar (clears top bar + chip row).
         "scroll-mt-[calc(6.75rem+env(safe-area-inset-top))] md:scroll-mt-20",
         "shadow-[0_1px_2px_rgba(16,10,0,0.04),0_8px_24px_-16px_rgba(16,10,0,0.08)]",
         "transition-all duration-200",
-        // Hover: slightly stronger shadow + accent-tinted border.
-        "hover:border-accent/50 hover:shadow-[0_2px_4px_rgba(16,10,0,0.04),0_12px_28px_-12px_rgba(16,10,0,0.12)]",
+        // Hover: slightly stronger shadow + a darker hairline.
+        "hover:border-foreground/25 hover:shadow-[0_2px_4px_rgba(16,10,0,0.04),0_12px_28px_-12px_rgba(16,10,0,0.12)]",
         spans === 2 && "md:col-span-2",
         className
       )}
@@ -67,7 +68,7 @@ export function Tile({
             </span>
           ) : null}
           <div className="min-w-0 pt-0.5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
+            <div className="text-[12.5px] font-extrabold uppercase tracking-[0.13em] text-foreground">
               {label}
             </div>
             {sublabel ? (

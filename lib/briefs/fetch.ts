@@ -18,6 +18,27 @@ export type HubBrief = {
   created_at: string;
   updated_at: string;
   url: string;
+  // Revisions (added 2026-11-22). Optional so an older Brief Tool deploy
+  // that doesn't send them still renders the plain list.
+  revisions_url?: string;
+  revision_count?: number;
+  // The Monday All Projects item this brief belongs to.
+  monday_item_id?: string | null;
+  deliverables?: HubBriefDeliverable[];
+};
+
+// One deliverable on a brief. `revise_url` opens the Brief Tool on that
+// brief's Revisions tab with this deliverable's revision form open.
+export type HubBriefDeliverable = {
+  key: string;
+  kind: "video" | "photo" | "micro" | "graphic";
+  title: string;
+  revisions: number;
+  last_revision_at: string | null;
+  linked: boolean;
+  revise_url: string;
+  // The Monday sub-item this deliverable is tied to, when it has one.
+  subitem_id?: string | null;
 };
 
 export type BriefsForClient = {

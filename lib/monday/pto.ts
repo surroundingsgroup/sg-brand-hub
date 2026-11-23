@@ -1,27 +1,46 @@
-// PTO board reader — Monday board 9612850479 is where the PTO form
-// lands. We pull items + columns once per 60s and the Hub uses the
-// result to show (a) your own requests, (b) requests your reports
-// filed that need your approval, and (c) a "who's out today" strip
-// across the whole team.
+// The Monday "Time Off Request" board (9612850479): reading requests and
+// filing new ones from Surroundings.
+//
+// The board runs the approval flow by itself, with automations Justin built:
+//   - a new request is set to "New request" and its Team picks the approver
+//     (Content -> Austin, Social -> Sean, Account Management -> Arial,
+//     Administrative -> Justin)
+//   - when the status changes to Approved, the person in the Requestor column
+//     decides which individual PTO board gets the hours as a Usage row
+//
+// So a request filed from here has to look exactly like one filed on the
+// Monday form: the person's name as the item name, the Time off Dates
+// timeline, Hours Requested, Status while away, Team and Requestor.
+//
+// One catch. Surroundings writes to Monday with one account's token, so that
+// account is the item's creator, and an automation puts the creator in the
+// Requestor column. A few seconds after filing, the Requestor column is set
+// back to the person who asked.
+
+import { workingDays } from "@/lib/pto/holidays";
 
 const MONDAY_API_URL = "https://api.monday.com/v2";
 const PTO_BOARD_ID = process.env.MONDAY_BOARD_ID_PTO ?? "9612850479";
+export const PTO_BOARD_URL = `https://nauticalnetwork.monday.com/boards/${PTO_BOARD_ID}`;
 
-async function mondayFetch<T>(
-  query: string,
-  variables?: Record<string, unknown>
-): Promise<T> {
+const COL = {
+  status: "status",
+  team: "status_12",
+  type: "status_1", // "Status while away"
+  hours: "numbers",
+  dates: "timeline",
+  requestor: "multiple_person_mkw9sn2y",
+  approver: "people6",
+} as const;
+
+async function mondayFetch<T>(query: string, variables?: Record<string, unknown>, opts: { fresh?: boolean } = {}): Promise<T> {
   const token = process.env.MONDAY_API_TOKEN;
   if (!token) throw new Error("MONDAY_API_TOKEN is not set");
   const res = await fetch(MONDAY_API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: token,
-      "API-Version": "2024-10",
-    },
+    headers: { "Content-Type": "application/json", Authorization: token, "API-Version": "2025-04" },
     body: JSON.stringify({ query, variables }),
-    next: { revalidate: 60 },
+    ...(opts.fresh ? { cache: "no-store" as const } : { next: { revalidate: 60 } }),
   });
   if (!res.ok) throw new Error(`Monday HTTP ${res.status}`);
   const body = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
@@ -30,454 +49,272 @@ async function mondayFetch<T>(
   return body.data;
 }
 
+// ---------------------------------------------------------------- reading
+
 export type PtoRequest = {
   id: string;
-  name: string;
-  requestor_name: string | null;
-  requestor_email: string | null;
+  name: string; // the item name: by convention the person's name
+  requestor_name: string | null; // the Requestor column, when filled
   start_date: string | null;
   end_date: string | null;
-  kind: string | null;
+  kind: string | null; // "Time off - Vacation" or "Half Day"
+  hours: number | null;
+  team: string | null;
+  approver: string | null;
   status: string | null;
-  status_color: string | null;
-  notes: string | null;
   created_at: string | null;
   monday_url: string;
 };
 
-type RawItem = {
-  id: string;
-  name: string;
-  created_at?: string | null;
-  column_values: Array<{
-    id: string;
-    text: string | null;
-    value: string | null;
-    type: string;
-  }>;
-};
+type RawItem = { id: string; name: string; created_at?: string | null; column_values: Array<{ id: string; text: string | null }> };
 
-type ColumnMeta = { id: string; title: string; type: string };
-
-// Pick a column id by type + optional title hint. Monday boards are
-// configured by hand, so we fall back to "any column of this type" if
-// a title match isn't found.
-function pickColumn(
-  cols: ColumnMeta[],
-  type: string,
-  titleIncludes?: RegExp
-): string | null {
-  const byType = cols.filter((c) => c.type === type);
-  if (titleIncludes) {
-    const match = byType.find((c) => titleIncludes.test(c.title));
-    if (match) return match.id;
-  }
-  return byType[0]?.id ?? null;
-}
-
-function parseDateRange(value: string | null): {
-  start_date: string | null;
-  end_date: string | null;
-} {
-  if (!value) return { start_date: null, end_date: null };
+export async function fetchPtoRequests(): Promise<{ ok: boolean; items: PtoRequest[]; error?: string }> {
   try {
-    const parsed = JSON.parse(value) as {
-      from?: string;
-      to?: string;
-      date?: string;
-    };
-    return {
-      start_date: parsed.from ?? parsed.date ?? null,
-      end_date: parsed.to ?? parsed.date ?? null,
-    };
-  } catch {
-    return { start_date: null, end_date: null };
-  }
-}
-
-function parsePersonEmail(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as {
-      personsAndTeams?: Array<{ id: number; kind: string }>;
-      email?: string;
-    };
-    if (parsed.email) return parsed.email;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function parseStatus(value: string | null): { label: string | null; color: string | null } {
-  if (!value) return { label: null, color: null };
-  try {
-    const parsed = JSON.parse(value) as { label?: string; color?: string };
-    return { label: parsed.label ?? null, color: parsed.color ?? null };
-  } catch {
-    return { label: null, color: null };
-  }
-}
-
-export async function fetchPtoRequests(): Promise<{
-  found: boolean;
-  items: PtoRequest[];
-  ok: boolean;
-  error?: string;
-}> {
-  try {
-    const data = await mondayFetch<{
-      boards: Array<{
-        id: string;
-        columns: ColumnMeta[];
-        items_page: { items: RawItem[] };
-      }>;
-    }>(
-      `query ($boardId: ID!) {
-        boards(ids: [$boardId]) {
-          id
-          columns { id title type }
-          items_page(limit: 200) {
-            items {
-              id
-              name
-              created_at
-              column_values { id text value type }
-            }
-          }
-        }
-      }`,
-      { boardId: PTO_BOARD_ID }
-    );
-
-    const board = data.boards?.[0];
-    if (!board) return { found: false, items: [], ok: true };
-
-    const cols = board.columns;
-    const dateCol = pickColumn(cols, "date", /dates?|range|time off|pto/i);
-    const personCol = pickColumn(cols, "people", /person|requestor|team member|employee/i);
-    const statusCol = pickColumn(
-      cols,
-      "status",
-      /status|approval|state/i
-    );
-    const notesCol = pickColumn(cols, "long-text", /notes|reason|details|message/i);
-    const kindCol = pickColumn(cols, "dropdown", /type|kind|category|reason/i) ??
-      pickColumn(cols, "status", /type|kind|category|reason/i);
-
-    const items: PtoRequest[] = board.items_page.items.map((it) => {
-      const cvById: Record<string, { text: string | null; value: string | null }> = {};
-      for (const cv of it.column_values) {
-        cvById[cv.id] = { text: cv.text, value: cv.value };
+    const items: PtoRequest[] = [];
+    const fields = `cursor items { id name created_at column_values(ids: ${JSON.stringify(Object.values(COL))}) { id text } }`;
+    let cursor: string | null = null;
+    for (let guard = 0; guard < 10; guard++) {
+      const page: { cursor: string | null; items: RawItem[] } = cursor
+        ? (await mondayFetch<{ next_items_page: { cursor: string | null; items: RawItem[] } }>(`query ($c: String!) { next_items_page(limit: 200, cursor: $c) { ${fields} } }`, { c: cursor })).next_items_page
+        : (await mondayFetch<{ boards: { items_page: { cursor: string | null; items: RawItem[] } }[] }>(`query ($b: ID!) { boards(ids: [$b]) { items_page(limit: 200) { ${fields} } } }`, { b: PTO_BOARD_ID })).boards[0].items_page;
+      for (const it of page.items) {
+        if (/test/i.test(it.name)) continue;
+        const v = (id: string) => (it.column_values.find((c) => c.id === id)?.text ?? "").trim();
+        const range = v(COL.dates).match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
+        items.push({
+          id: String(it.id),
+          name: it.name.trim(),
+          requestor_name: v(COL.requestor) || null,
+          start_date: range?.[1] ?? null,
+          end_date: range?.[2] ?? range?.[1] ?? null,
+          kind: v(COL.type) || null,
+          hours: v(COL.hours) === "" ? null : Number(v(COL.hours)) || 0,
+          team: v(COL.team) || null,
+          approver: v(COL.approver) || null,
+          status: v(COL.status) || null,
+          created_at: it.created_at ?? null,
+          monday_url: `${PTO_BOARD_URL}/pulses/${it.id}`,
+        });
       }
-      const dateRange = parseDateRange(dateCol ? cvById[dateCol]?.value ?? null : null);
-      const status = parseStatus(statusCol ? cvById[statusCol]?.value ?? null : null);
-      const personEmail = personCol
-        ? parsePersonEmail(cvById[personCol]?.value ?? null)
-        : null;
-      const personText = personCol ? cvById[personCol]?.text ?? null : null;
-      return {
-        id: it.id,
-        name: it.name,
-        requestor_name: personText,
-        requestor_email: personEmail,
-        start_date: dateRange.start_date,
-        end_date: dateRange.end_date,
-        kind: kindCol ? cvById[kindCol]?.text ?? null : null,
-        status: status.label ?? (statusCol ? cvById[statusCol]?.text ?? null : null),
-        status_color: status.color,
-        notes: notesCol ? cvById[notesCol]?.text ?? null : null,
-        created_at: it.created_at ?? null,
-        monday_url: `https://nauticalnetwork.monday.com/boards/${PTO_BOARD_ID}/pulses/${it.id}`,
-      };
-    });
-
-    return { found: true, items, ok: true };
+      cursor = page.cursor;
+      if (!cursor) break;
+    }
+    return { ok: true, items };
   } catch (e) {
-    return {
-      found: false,
-      items: [],
-      ok: false,
-      error: (e as Error).message,
-    };
+    return { ok: false, items: [], error: (e as Error).message };
   }
 }
 
-/** Is the signed-in user currently out? Any PTO item whose range covers
- *  today AND whose status is approved (or at least not denied/declined). */
-export function isOutToday(req: PtoRequest, now = new Date()): boolean {
-  if (!req.start_date) return false;
-  const start = new Date(req.start_date + "T00:00:00").getTime();
-  const end = new Date((req.end_date ?? req.start_date) + "T23:59:59").getTime();
-  const today = now.getTime();
-  if (today < start || today > end) return false;
-  const status = (req.status ?? "").toLowerCase();
-  if (status.includes("denied") || status.includes("declined") || status.includes("rejected")) {
-    return false;
-  }
-  return true;
+export const isApproved = (req: PtoRequest) => /^(approved|complete)$/i.test(req.status ?? "");
+export const isRejected = (req: PtoRequest) => /reject|denied|declined/i.test(req.status ?? "");
+/** Waiting for the manager: a new request, or one with no status yet. */
+export const isPending = (req: PtoRequest) => !req.status || /new request/i.test(req.status);
+
+/** Out today: an approved request whose dates cover today. */
+export function isOutToday(req: PtoRequest, today: string): boolean {
+  if (!req.start_date || !isApproved(req)) return false;
+  return req.start_date <= today && today <= (req.end_date ?? req.start_date);
 }
 
-/** Items awaiting approval — status is clearly "pending" / "submitted" and
- *  the start date hasn't passed. */
-export function isPending(req: PtoRequest): boolean {
-  const status = (req.status ?? "").toLowerCase();
-  return (
-    status === "" ||
-    status.includes("pending") ||
-    status.includes("submitted") ||
-    status.includes("review") ||
-    status.includes("awaiting")
-  );
-}
-
-/** YYYY-MM-DD pretty. */
 export function fmtPtoDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso + "T12:00:00");
+  if (!iso) return "";
+  const d = new Date(`${iso}T12:00:00Z`);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-// ── Submission schema — read the board's columns so the Hub form's
-// PTO-type dropdown and default status match what Operations configured
-// in Monday. Cached in the fetch cache for 5 minutes.
+// ---------------------------------------------------------------- the form
 
-export type PtoSchema = {
-  found: boolean;
-  columns: {
-    personColId: string | null;
-    dateColId: string | null;
-    statusColId: string | null;
-    typeColId: string | null;
-    typeColKind: "status" | "dropdown" | null;
-    notesColId: string | null;
-  };
-  typeLabels: string[];
-  statusLabels: string[];
-  defaultStatusLabel: string | null;
-};
+export const HALF_DAY = /half/i;
+const FALLBACK_TYPES = ["Time off - Vacation", "Half Day"];
 
-const DEFAULT_TYPES = ["Vacation", "Sick", "Personal", "Bereavement", "Other"];
-
-type ColumnFull = {
-  id: string;
-  title: string;
-  type: string;
-  settings_str: string | null;
-};
-
-type SettingsLabels =
-  | { labels?: Record<string, string>; labels_v2?: Array<{ id: number; name: string }> }
-  | { labels?: Array<{ id: string | number; name: string }> };
-
-function parseSettingsLabels(raw: string | null): string[] {
-  if (!raw) return [];
+/** The choices under "Status while away" on the board, so the form offers exactly what Monday accepts. */
+export async function fetchPtoTypes(): Promise<string[]> {
   try {
-    const parsed = JSON.parse(raw) as SettingsLabels;
-    if (parsed && Array.isArray((parsed as { labels?: unknown[] }).labels)) {
-      return ((parsed as { labels: Array<{ name?: string; id?: unknown }> }).labels)
-        .map((l) => l.name ?? "")
-        .filter((n) => typeof n === "string" && n.trim().length > 0);
-    }
-    if (parsed && (parsed as { labels?: Record<string, string> }).labels &&
-        typeof (parsed as { labels: Record<string, string> }).labels === "object") {
-      return Object.values(
-        (parsed as { labels: Record<string, string> }).labels
-      ).filter((n): n is string => typeof n === "string" && n.trim().length > 0);
-    }
-    if (parsed && Array.isArray((parsed as { labels_v2?: Array<{ name: string }> }).labels_v2)) {
-      return ((parsed as { labels_v2: Array<{ name: string }> }).labels_v2)
-        .map((l) => l.name)
-        .filter((n) => typeof n === "string" && n.trim().length > 0);
-    }
+    const data = await mondayFetch<{ boards: { columns: { id: string; settings_str: string | null }[] }[] }>(`query ($b: ID!) { boards(ids: [$b]) { columns(ids: ["${COL.type}"]) { id settings_str } } }`, { b: PTO_BOARD_ID });
+    const raw = data.boards?.[0]?.columns?.[0]?.settings_str;
+    const labels = raw ? (JSON.parse(raw) as { labels?: Record<string, string> }).labels : null;
+    const names = labels ? Object.values(labels).filter((n) => typeof n === "string" && n.trim()) : [];
+    // Full days first, half day second.
+    return names.length ? names.sort((a, b) => Number(HALF_DAY.test(a)) - Number(HALF_DAY.test(b))) : FALLBACK_TYPES;
   } catch {
-    // fall through
-  }
-  return [];
-}
-
-export async function fetchPtoSchema(): Promise<PtoSchema> {
-  try {
-    const data = await mondayFetch<{
-      boards: Array<{
-        id: string;
-        columns: ColumnFull[];
-      }>;
-    }>(
-      `query ($boardId: ID!) {
-        boards(ids: [$boardId]) {
-          id
-          columns { id title type settings_str }
-        }
-      }`,
-      { boardId: PTO_BOARD_ID }
-    );
-    const board = data.boards?.[0];
-    if (!board) {
-      return {
-        found: false,
-        columns: {
-          personColId: null,
-          dateColId: null,
-          statusColId: null,
-          typeColId: null,
-          typeColKind: null,
-          notesColId: null,
-        },
-        typeLabels: DEFAULT_TYPES,
-        statusLabels: [],
-        defaultStatusLabel: null,
-      };
-    }
-    const cols = board.columns;
-    const personColId = pickColumn(cols, "people", /person|requestor|team member|employee/i);
-    const dateColId = pickColumn(cols, "date", /dates?|range|time off|pto/i);
-
-    // Status column — the "where in the approval pipeline" one.
-    const statusColId =
-      cols.find((c) => c.type === "status" && /status|approval|state/i.test(c.title))?.id ??
-      pickColumn(cols, "status");
-
-    // Type column — separate from status. Prefer dropdown with a
-    // "type/kind/category/reason" title; fall back to any dropdown; fall
-    // back to a second status column.
-    let typeColId: string | null = null;
-    let typeColKind: "status" | "dropdown" | null = null;
-    const typeDropdown =
-      cols.find((c) => c.type === "dropdown" && /type|kind|category|reason/i.test(c.title)) ??
-      cols.find((c) => c.type === "dropdown");
-    if (typeDropdown) {
-      typeColId = typeDropdown.id;
-      typeColKind = "dropdown";
-    } else {
-      const typeStatus = cols.find(
-        (c) => c.type === "status" && c.id !== statusColId && /type|kind|category|reason/i.test(c.title)
-      );
-      if (typeStatus) {
-        typeColId = typeStatus.id;
-        typeColKind = "status";
-      }
-    }
-
-    const notesColId = pickColumn(cols, "long-text", /notes|reason|details|message/i);
-
-    const typeLabels =
-      typeColId
-        ? parseSettingsLabels(cols.find((c) => c.id === typeColId)?.settings_str ?? null)
-        : [];
-    const statusLabels =
-      statusColId
-        ? parseSettingsLabels(cols.find((c) => c.id === statusColId)?.settings_str ?? null)
-        : [];
-
-    // Default status = anything that reads as "pending" / "submitted"
-    // / "awaiting"; fallback to the first label.
-    const defaultStatusLabel =
-      statusLabels.find((l) =>
-        /pending|submitted|awaiting|review|new|requested/i.test(l)
-      ) ?? statusLabels[0] ?? null;
-
-    return {
-      found: true,
-      columns: {
-        personColId,
-        dateColId,
-        statusColId,
-        typeColId,
-        typeColKind,
-        notesColId,
-      },
-      typeLabels: typeLabels.length > 0 ? typeLabels : DEFAULT_TYPES,
-      statusLabels,
-      defaultStatusLabel,
-    };
-  } catch {
-    return {
-      found: false,
-      columns: {
-        personColId: null,
-        dateColId: null,
-        statusColId: null,
-        typeColId: null,
-        typeColKind: null,
-        notesColId: null,
-      },
-      typeLabels: DEFAULT_TYPES,
-      statusLabels: [],
-      defaultStatusLabel: null,
-    };
+    return FALLBACK_TYPES;
   }
 }
+
+// Which Team a request is filed under, and so who approves it. The board
+// assigns the approver from the Team; this picks the Team from the person's
+// manager in Surroundings. Anyone who reports to Billy, or to nobody, goes to
+// the Administrative Team, which Justin approves.
+const TEAMS: { manager: string; team: string }[] = [
+  { manager: "austin tompkins", team: "Content Team" },
+  { manager: "sean odonnell", team: "Social Team" },
+  { manager: "arial pavlock", team: "Account Management Team" },
+];
+const ADMIN_TEAM = { team: "Administrative Team", approver: "Justin Tarr" };
+// Nobody approves their own time off. When the board would send a request to its own requester
+// (Justin's go to the Administrative Team, which Justin approves), it goes to Billy instead.
+const OVERRIDE_APPROVER = "Billy Pavlock";
+const plain = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
+
+export function teamFor(managerName: string | null | undefined, requesterName?: string | null): { team: string; approver: string; overridden: boolean } {
+  const hit = TEAMS.find((t) => t.manager === plain(managerName));
+  const base = hit ? { team: hit.team, approver: (managerName ?? "").trim() } : ADMIN_TEAM;
+  if (requesterName && plain(requesterName) === plain(base.approver)) return { team: base.team, approver: OVERRIDE_APPROVER, overridden: true };
+  return { ...base, overridden: false };
+}
+
+/** Working days from start to end, both included: weekdays that are not company holidays. */
+export function weekdaysBetween(start: string, end: string): number {
+  return workingDays(start, end).days;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function submitPtoRequest(input: {
   requestorMondayId: string | null;
-  requestorName: string;
-  requestorEmail: string | null;
+  requestorName: string; // the person's full name: it becomes the item name
   type: string;
   startDate: string;
   endDate: string;
+  hours: number;
+  team: string;
   notes: string;
+  approverMondayId?: string | null; // only when the board's own pick has to be replaced (see teamFor)
 }): Promise<{ id: string; monday_url: string }> {
-  const schema = await fetchPtoSchema();
-  if (!schema.found) {
-    throw new Error("PTO board schema not available.");
-  }
-  const cols = schema.columns;
-
-  // Build the column_values JSON.
-  const columnValues: Record<string, unknown> = {};
-
-  if (cols.personColId) {
-    if (input.requestorMondayId) {
-      columnValues[cols.personColId] = {
-        personsAndTeams: [
-          { id: Number(input.requestorMondayId), kind: "person" },
-        ],
-      };
-    }
-  }
-  if (cols.dateColId) {
-    columnValues[cols.dateColId] =
-      input.startDate === input.endDate
-        ? { date: input.startDate }
-        : { from: input.startDate, to: input.endDate };
-  }
-  if (cols.typeColId) {
-    if (cols.typeColKind === "dropdown") {
-      columnValues[cols.typeColId] = { labels: [input.type] };
-    } else {
-      columnValues[cols.typeColId] = { label: input.type };
-    }
-  }
-  if (cols.statusColId && schema.defaultStatusLabel) {
-    columnValues[cols.statusColId] = { label: schema.defaultStatusLabel };
-  }
-  if (cols.notesColId && input.notes.trim()) {
-    columnValues[cols.notesColId] = String(input.notes).slice(0, 2000);
-  }
-
-  // Item name: "<Requestor> — <Type> (start date)"
-  const name = `${input.requestorName} · ${input.type} · ${input.startDate}`;
-
-  const data = await mondayFetch<{
-    create_item: { id: string } | null;
-  }>(
-    `mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
-      create_item(board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
-        id
-      }
-    }`,
-    {
-      boardId: PTO_BOARD_ID,
-      itemName: name,
-      columnValues: JSON.stringify(columnValues),
-    }
-  );
-  const item = data.create_item;
-  if (!item) throw new Error("Monday create_item returned no id.");
-  return {
-    id: item.id,
-    monday_url: `https://nauticalnetwork.monday.com/boards/${PTO_BOARD_ID}/pulses/${item.id}`,
+  const columnValues: Record<string, unknown> = {
+    [COL.status]: { label: "New request" },
+    [COL.type]: { label: input.type },
+    [COL.hours]: String(input.hours),
+    [COL.dates]: { from: input.startDate, to: input.endDate },
   };
+  if (input.team) columnValues[COL.team] = { label: input.team };
+  const person = (id: string) => ({ personsAndTeams: [{ id: Number(id), kind: "person" }] });
+  if (input.requestorMondayId) columnValues[COL.requestor] = person(input.requestorMondayId);
+
+  const data = await mondayFetch<{ create_item: { id: string } | null }>(
+    `mutation ($b: ID!, $name: String!, $values: JSON!) { create_item(board_id: $b, item_name: $name, column_values: $values, create_labels_if_missing: false) { id } }`,
+    { b: PTO_BOARD_ID, name: input.requestorName, values: JSON.stringify(columnValues) },
+    { fresh: true }
+  );
+  const id = data.create_item?.id;
+  if (!id) throw new Error("Monday did not create the request.");
+
+  // The note goes on as the request's first update, where the approver reads it. A failure here never loses the request.
+  const note = input.notes.trim();
+  if (note) {
+    try {
+      await mondayFetch(`mutation ($i: ID!, $body: String!) { create_update(item_id: $i, body: $body) { id } }`, { i: id, body: note.slice(0, 2000) }, { fresh: true });
+    } catch {
+      /* the request is in; the note is not */
+    }
+  }
+
+  // The board's own automations run right after the item is made: one puts the creator (the account Surroundings
+  // writes with) in Requestor, another picks the approver from the Team. Put back what they overwrite, and check
+  // a few times, since they can take a few seconds. A failure here leaves the request in place.
+  const want: Record<string, string> = {};
+  if (input.requestorMondayId) want[COL.requestor] = input.requestorMondayId;
+  if (input.approverMondayId) want[COL.approver] = input.approverMondayId;
+  if (Object.keys(want).length) {
+    try {
+      // The board's creation automations take up to about 4 seconds, so a value that looks right at first can still
+      // be overwritten. Check at 5 and 8 seconds every time, and once more at 11 if the 8-second check had to fix it.
+      for (const [n, wait] of [5000, 3000, 3000].entries()) {
+        await sleep(wait);
+        const check = await mondayFetch<{ items: { column_values: { id: string; value: string | null }[] }[] }>(
+          `query ($i: [ID!], $c: [String!]) { items(ids: $i) { column_values(ids: $c) { id value } } }`,
+          { i: [id], c: Object.keys(want) },
+          { fresh: true }
+        );
+        const wrong = Object.entries(want).filter(([col, uid]) => {
+          const v = check.items?.[0]?.column_values?.find((c) => c.id === col)?.value;
+          const ids = ((v ? JSON.parse(v) : {}) as { personsAndTeams?: { id: number }[] }).personsAndTeams ?? [];
+          return !(ids.length === 1 && String(ids[0].id) === uid);
+        });
+        if (!wrong.length && n >= 1) break;
+        if (!wrong.length) continue;
+        const fix = Object.fromEntries(wrong.map(([col, uid]) => [col, person(uid)]));
+        await mondayFetch(
+          `mutation ($b: ID!, $i: ID!, $values: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $values) { id } }`,
+          { b: PTO_BOARD_ID, i: id, values: JSON.stringify(fix) },
+          { fresh: true }
+        );
+      }
+    } catch {
+      /* the request is in; Requestor or approver may need fixing by hand */
+    }
+  }
+
+  return { id, monday_url: `${PTO_BOARD_URL}/pulses/${id}` };
+}
+
+// ---------------------------------------------------------------- approving
+
+export type PtoApproval = { id: string; name: string; from: string | null; to: string | null; hours: number | null; kind: string | null; filed: string | null; url: string };
+
+/** Requests waiting on this person: status New request, and they are the Manager (Approver). For the To-dos card. */
+export async function fetchMyPtoApprovals(approverMondayId: string): Promise<{ ok: boolean; items: PtoApproval[] }> {
+  try {
+    type Item = { id: string; name: string; created_at: string | null; column_values: { id: string; text: string | null }[] };
+    const data = await mondayFetch<{ boards: { items_page: { items: Item[] } }[] }>(
+      `query ($b: ID!, $p: ItemsQuery) { boards(ids: [$b]) { items_page(limit: 100, query_params: $p) { items { id name created_at column_values(ids: ["${COL.status}", "${COL.dates}", "${COL.hours}", "${COL.type}"]) { id text } } } } }`,
+      { b: PTO_BOARD_ID, p: { rules: [{ column_id: COL.approver, compare_value: [`person-${approverMondayId}`], operator: "any_of" }] } },
+      { fresh: true }
+    );
+    const items = (data.boards?.[0]?.items_page?.items ?? [])
+      .map((it) => {
+        const v = (id: string) => (it.column_values.find((c) => c.id === id)?.text ?? "").trim();
+        const range = v(COL.dates).match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
+        return {
+          status: v(COL.status),
+          id: String(it.id),
+          name: it.name.trim(),
+          from: range?.[1] ?? null,
+          to: range?.[2] ?? range?.[1] ?? null,
+          hours: v(COL.hours) === "" ? null : Number(v(COL.hours)) || 0,
+          kind: v(COL.type) || null,
+          filed: (it.created_at ?? "").slice(0, 10) || null,
+          url: `${PTO_BOARD_URL}/pulses/${it.id}`,
+        };
+      })
+      .filter((r) => /new request/i.test(r.status) && !/test/i.test(r.name))
+      .map(({ status: _status, ...r }) => r)
+      .sort((a, b) => (a.from ?? "9999").localeCompare(b.from ?? "9999"));
+    return { ok: true, items };
+  } catch {
+    return { ok: false, items: [] };
+  }
+}
+
+/**
+ * Approve or decline a time-off request from Surroundings. Only the request's
+ * Manager (Approver), or an admin, and only while it is still a new request.
+ * Sets the status on Monday, which runs the board's own automations (the
+ * requester is told; on approval the hours go to their PTO board), and logs who
+ * decided as an update on the request, since the change itself is made with
+ * the account Surroundings writes with.
+ */
+export async function decidePtoRequest(input: { itemId: string; decision: "approve" | "decline"; deciderMondayId: string; deciderName: string; isAdmin: boolean; note?: string }): Promise<{ status: string }> {
+  type Item = { board: { id: string }; column_values: { id: string; text: string | null; value: string | null }[] };
+  const data = await mondayFetch<{ items: Item[] }>(`query ($i: [ID!]) { items(ids: $i) { board { id } column_values(ids: ["${COL.status}", "${COL.approver}"]) { id text value } } }`, { i: [input.itemId] }, { fresh: true });
+  const item = data.items?.[0];
+  if (!item || String(item.board.id) !== PTO_BOARD_ID) throw new Error("That request could not be found.");
+  const status = item.column_values.find((c) => c.id === COL.status)?.text ?? "";
+  if (!/new request/i.test(status)) throw new Error(`That request is already ${status || "decided"}.`);
+  const approvers = ((JSON.parse(item.column_values.find((c) => c.id === COL.approver)?.value ?? "{}") as { personsAndTeams?: { id: number }[] }).personsAndTeams ?? []).map((p) => String(p.id));
+  if (!input.isAdmin && !approvers.includes(input.deciderMondayId)) throw new Error("Only the approver on this request can decide it.");
+  const label = input.decision === "approve" ? "Approved" : "Rejected";
+  await mondayFetch(
+    `mutation ($b: ID!, $i: ID!, $v: JSON!) { change_column_value(board_id: $b, item_id: $i, column_id: "${COL.status}", value: $v) { id } }`,
+    { b: PTO_BOARD_ID, i: input.itemId, v: JSON.stringify({ label }) },
+    { fresh: true }
+  );
+  const note = (input.note ?? "").trim().slice(0, 500);
+  try {
+    await mondayFetch(`mutation ($i: ID!, $body: String!) { create_update(item_id: $i, body: $body) { id } }`, { i: input.itemId, body: `${label} by ${input.deciderName} in Surroundings.${note ? ` Note: ${note}` : ""}` }, { fresh: true });
+  } catch {
+    /* the decision stands; the note did not post */
+  }
+  return { status: label };
 }

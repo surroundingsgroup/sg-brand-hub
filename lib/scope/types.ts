@@ -105,6 +105,11 @@ export type BrandScope = {
   end_date?: string;
   renewal_date?: string;
   auto_renew?: boolean;
+  // Length of each renewal term in months, when it differs from the span
+  // between Start and End: a 6-month first term that renews for 12, or a
+  // record that keeps the ORIGINAL start beside the CURRENT end (the way the
+  // Monday All Accounts board shows a contract that has already renewed).
+  renewal_months?: number;
 
   // Production
   shoot_cadence?: ShootCadence;
@@ -126,7 +131,39 @@ export type BrandScope = {
   monthly_hours?: number; // creator/editor hours allotted per month
 
   notes?: string; // internal only
+
+  // Set by the app, not the form: this client's row on the Monday "All
+  // Accounts" board, where the contract dates are copied (lib/scope/board-sync.ts).
+  monday_account_item_id?: string;
+  // The client's name in SocialDesk, only when it differs from the name here.
+  // Unused since the names were unified (2026-11-22); kept as the escape hatch.
+  socialdesk_client?: string;
+  // The agreement file (Monday asset id, All Accounts board) this scope was
+  // last checked against. A newer file on the row means a new agreement.
+  agreement_asset_id?: string;
+  // A scope drafted from a newly uploaded agreement, waiting for the account
+  // manager to check and save (lib/scope/agreement.ts).
+  pending_draft?: ScopeDraft;
 };
+
+// A first pass at the scope, read from the signed agreement. Never the
+// agreement itself: no file, no fees, only the working scope.
+export type ScopeDraft = {
+  scope: BrandScope; // the contract fields the reader found, nothing else
+  check: string[]; // what the account manager should look at before saving
+  file: string; // the agreement's file name on the board
+  asset_id: string;
+  uploaded_at?: string; // YYYY-MM-DD
+  drafted_at: string; // ISO
+};
+
+// Keys the app keeps inside the scope blob that are not the contract.
+const APP_SCOPE_KEYS = new Set(["monday_account_item_id", "socialdesk_client", "agreement_asset_id", "pending_draft"]);
+
+/** True when somebody has actually entered a scope (app bookkeeping does not count). */
+export function scopeHasContent(s: BrandScope | null | undefined): s is BrandScope {
+  return !!s && Object.keys(s).some((k) => !APP_SCOPE_KEYS.has(k));
+}
 
 // Derive End + Renewal from Start + a fixed-length term. Month-to-month and
 // Custom return nothing (open-ended / hand-entered). End is the last day of the

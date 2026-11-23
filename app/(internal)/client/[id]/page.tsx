@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Tile, TileEmpty } from "@/components/client-profile/tile";
-import { BriefsTile } from "@/components/client-profile/briefs-tile";
 import { ProjectsTile } from "@/components/client-profile/projects-tile";
 import { SocialDeskTile } from "@/components/client-profile/socialdesk-tile";
 import { ScopeTile } from "@/components/client-profile/scope-tile";
@@ -33,18 +32,23 @@ import { fetchAccountManagers } from "@/lib/monday/teams";
 import { ContactTile } from "@/components/client-profile/contact-tile";
 import { NeedsYouBar } from "@/components/client-profile/needs-you-bar";
 import { AllocationTile } from "@/components/client-profile/allocation-tile";
+import { boardHoursFor, fetchBoardAllocations } from "@/lib/allocations/board-hours";
+import { fetchInvoices, invoicesFor } from "@/lib/monday/invoicing";
+import { getViewer } from "@/lib/access";
 import { MeetingsTile } from "@/components/client-profile/meetings-tile";
 import { InvoicingTile, overdueInvoiceCount } from "@/components/client-profile/invoicing-tile";
 import { IndustryUpdateTile } from "@/components/client-profile/industry-update-tile";
 import { ClientHero } from "@/components/client-profile/client-hero";
 import { fetchClientBoardData, fetchAllocationSetup } from "@/lib/monday/client-board";
 import { RequestVideoAssetsButton } from "@/components/brand/request-video-assets-button";
-import { fetchProjectsForClient } from "@/lib/monday/projects";
+import { fetchBoardRecordsFrom, fetchProjectsForClient } from "@/lib/monday/projects";
 import { fetchProjectStatusLabels } from "@/lib/monday/projects-mutate";
 import { fetchContentPulse } from "@/lib/socialdesk/fetch";
 import { fetchBriefsForClient } from "@/lib/briefs/fetch";
+import { fetchClientMeetings } from "@/lib/meetings/calendar";
 import type { BrandScope } from "@/lib/scope/types";
 import { projectKind, type DatedProject } from "@/lib/scope/pace";
+import { easternToday, effectiveScope } from "@/lib/scope/summary";
 import type { Brand, BrandLogo } from "@/types/brand";
 
 export const dynamic = "force-dynamic";
@@ -83,12 +87,27 @@ export default async function ClientProfilePage({
   // Fetch the cross-app data (Monday projects + SocialDesk pulse + Brief
   // Tool briefs) in parallel, once. Each tile receives its slice as
   // props; the Activity feed aggregates across everything.
-  const [projectsData, pulseData, briefsData, statusLabels, clientBoardData] = await Promise.all([
-    fetchProjectsForClient(b.business_name),
-    fetchContentPulse(b.business_name),
+  const typedScope = (b as unknown as { scope?: BrandScope | null }).scope ?? null;
+  // Hours on the Monday Allocation board, for the rate math on the Allocation card.
+  const boardAllocationsPromise = fetchBoardAllocations();
+  // Invoices for this client, from the Monday Invoicing board.
+  const invoicesPromise = fetchInvoices();
+  const viewerPromise = getViewer(supabase);
+  const [projectsData, pulseData, briefsData, statusLabels, clientBoardData, recordsFrom, calendarMeetings] = await Promise.all([
+    fetchProjectsForClient(b.business_name, { withSubitems: true }),
+    // SocialDesk may know this client by another name (kept on the scope).
+    // With a contract on file, also ask for the posts approved each month
+    // since the term in force began.
+    fetchContentPulse(typedScope?.socialdesk_client || b.business_name, {
+      since: typedScope?.start_date ? effectiveScope(typedScope).start_date : null,
+    }),
     fetchBriefsForClient(b.business_name),
     fetchProjectStatusLabels(),
-    fetchClientBoardData(b.business_name),
+    fetchClientBoardData(b.business_name, (b as unknown as { monday_board_id?: string | number | null }).monday_board_id),
+    // How far back the All Projects board goes (earlier contract periods are not judged).
+    fetchBoardRecordsFrom(),
+    // Meetings with this client on the team's Google Calendars (via the Brief Tool).
+    fetchClientMeetings(b.business_name),
   ]);
 
   // Allocation Setup subitems need the board's items to exist first; do
@@ -129,6 +148,10 @@ export default async function ClientProfilePage({
         .order("month", { ascending: false })
         .limit(4),
     ]);
+  const boardAllocations = await boardAllocationsPromise;
+  const allInvoices = await invoicesPromise;
+  const viewer = await viewerPromise;
+  const clientInvoices = invoicesFor(allInvoices.rows, b as unknown as { business_name: string; monday_board_id?: string | number | null });
   const allocationCurrent = currentAlloc as {
     year: number;
     month: number;
@@ -257,10 +280,10 @@ export default async function ClientProfilePage({
         scope={scope}
         socialdeskClientUrl={
           pulseData.client_id
-            ? `${process.env.SOCIALDESK_URL ?? "https://socialdesk-lac.vercel.app"}/?client=${pulseData.client_id}`
+            ? `${process.env.SOCIALDESK_URL ?? "https://socialdesk-lac.vercel.app"}/#/client/${pulseData.client_id}`
             : null
         }
-        overdueInvoices={overdueInvoiceCount(clientBoardData)}
+        overdueInvoices={overdueInvoiceCount(clientInvoices)}
         clientBoardUrl={
           clientBoardData.boardId
             ? `https://nauticalnetwork.monday.com/boards/${clientBoardData.boardId}`
@@ -273,36 +296,52 @@ export default async function ClientProfilePage({
           to actually write. */}
       <SectionNav />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
-        {/* Row 1 — who, and their content pulse */}
+        {/* Row 1 — who, and when we talk */}
         <ContactTile brand={b} />
-        <SocialDeskTile pulse={pulseData} />
+        <MeetingsTile brandId={b.id} pastMeetings={pastMeetings} calendar={calendarMeetings} />
 
-        {/* Row 2 — primary in-motion signal (full width) */}
-        <ProjectsTile data={projectsData} brandId={b.id} statusLabels={statusLabels} />
+        {/* Row 2 — work in motion: each Monday project with its brief and
+            deliverables in one row (full width) */}
+        <ProjectsTile data={projectsData} brandId={b.id} brandName={b.business_name} statusLabels={statusLabels} briefs={briefsData} />
 
-        {/* Row 3 — when we talk / hours we're planning */}
-        <MeetingsTile brandId={b.id} pastMeetings={pastMeetings} />
+        {/* Row 3 — social: this month and next (full width) */}
+        <SocialDeskTile pulse={pulseData} contractChannels={scope?.channels} />
+
+        {/* Row 4 — contract health (full width) */}
+        <ScopeTile
+          brandId={b.id}
+          initialScope={scope}
+          socialHistory={pulseData.history}
+          socialConnected={pulseData.ok && pulseData.found}
+          recordsFrom={recordsFrom}
+          datedProjects={datedProjects}
+          pool={scopePool}
+          poolOptions={poolOptions}
+          today={easternToday()}
+        />
+
+        {/* Row 5 — hours we're planning / money */}
         <AllocationTile
           brandId={b.id}
           current={allocationCurrent}
           upcoming={allocationNext}
           setup={allocationSetup}
           history={allocationHistory}
+          expected={b.engagement_type === "retainer" || allocationSetup.totalHours > 0}
+          monthly={typeof typedScope?.retainer_amount === "number" ? typedScope.retainer_amount : null}
+          boardHours={{
+            current: boardHoursFor(boardAllocations.rows, b as unknown as { business_name: string; monday_board_id?: string | number | null }, curYear, curMonth),
+            upcoming: boardHoursFor(boardAllocations.rows, b as unknown as { business_name: string; monday_board_id?: string | number | null }, nextYear, nextMonth),
+          }}
         />
-
-        {/* Row 4 — contract health / money */}
-        <ScopeTile
-          brandId={b.id}
-          initialScope={scope}
-          mtdChannelCounts={pulseData.mtd}
-          datedProjects={datedProjects}
-          pool={scopePool}
-          poolOptions={poolOptions}
+        <InvoicingTile
+          invoices={clientInvoices}
+          monthly={typeof typedScope?.retainer_amount === "number" ? typedScope.retainer_amount : null}
+          ok={allInvoices.ok}
+          monthLabel={nowDate.toLocaleDateString("en-US", { month: "long", timeZone: "America/New_York" })}
+          period={{ year: curYear, month: curMonth }}
+          allHref={viewer.everyone ? "/accounts/invoicing" : undefined}
         />
-        <InvoicingTile data={clientBoardData} />
-
-        {/* Row 5 — active briefs (full width) */}
-        <BriefsTile brandName={b.business_name} data={briefsData} />
 
         {/* Row 6 — strategic context / reference material */}
         <IndustryUpdateTile
@@ -380,11 +419,10 @@ export default async function ClientProfilePage({
           </div>
         </Tile>
 
-        {/* Row 7 — scratchpad (full width) */}
+        {/* Scratchpad: half width, beside Files & Documents (the industry notes above take the full row) */}
         <Tile
           label="Internal notes"
           icon={<FileText className="h-3.5 w-3.5" />}
-          spans={2}
         >
           {b.internal_notes ? (
             <p className="whitespace-pre-wrap text-sm text-foreground">

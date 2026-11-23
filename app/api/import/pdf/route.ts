@@ -2,18 +2,10 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isEmailAllowed } from "@/lib/auth/domain";
 import { extractBrandFromPdf } from "@/lib/anthropic/extract-pdf";
+import { SELECTABLE_VERTICALS } from "@/types/brand";
 
-const VALID_VERTICALS = new Set([
-  "marine",
-  "private_aviation",
-  "automotive",
-  "real_estate",
-  "real_estate_development",
-  "multifamily_residential",
-  "resort_travel",
-  "home_services",
-  "other",
-]);
+// The unified list (same as the Monday Deals board).
+const VALID_VERTICALS = new Set<string>(SELECTABLE_VERTICALS);
 
 // Claude's PDF processing can take 30–60s for a multi-page doc.
 export const maxDuration = 120;

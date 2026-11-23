@@ -17,6 +17,13 @@ const PUBLIC_PATHS = [
   // Dev/test endpoints — gated on a bearer token at the route level (the
   // service-role key), not via the team session.
   "/api/dev",
+  // Contract-health feed for the Brief Tool (bearer secret at the route).
+  "/api/contract-health",
+  "/api/pto-sync", // Brief tool cron; bearer HUB_BRIEF_API_TOKEN
+  // Drafted-scope feed for the Brief Tool's morning run (same bearer secret).
+  "/api/agreement-drafts",
+  // Connector API for an outside assistant (its own bearer token at the route).
+  "/api/connect",
   // Home-screen app manifest + icons (not sensitive; fetched without cookies).
   "/manifest.webmanifest",
   "/pwa-icon",

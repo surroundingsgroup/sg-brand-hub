@@ -46,9 +46,6 @@ export function PersonRow({
           <span className="truncate text-[14px] font-semibold text-foreground">
             {display}
           </span>
-          {p?.pronouns ? (
-            <span className="text-[11px] text-muted-foreground">({p.pronouns})</span>
-          ) : null}
           {isMe ? (
             <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               You

@@ -86,7 +86,6 @@ export function ProfileForm({
     department: initialProfile?.department ?? "",
     employment_type: initialProfile?.employment_type ?? "full_time",
     phone: initialProfile?.phone ?? "",
-    pronouns: initialProfile?.pronouns ?? "",
     slack_handle: initialProfile?.slack_handle ?? "",
     time_zone: initialProfile?.time_zone ?? "",
     location: initialProfile?.location ?? "",
@@ -250,13 +249,6 @@ export function ProfileForm({
             placeholder="ET"
             value={form.time_zone}
             onChange={(e) => patch("time_zone", e.target.value)}
-          />
-        </Field>
-        <Field label="Pronouns">
-          <Input
-            placeholder="they/them"
-            value={form.pronouns}
-            onChange={(e) => patch("pronouns", e.target.value)}
           />
         </Field>
       </Section>

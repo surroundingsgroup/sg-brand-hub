@@ -87,17 +87,17 @@ function BrandCard({
     <Link
       href={`/client/${brand.id}`}
       className={cn(
-        "group relative flex flex-col gap-3 rounded-2xl border border-border/60 bg-panel p-4 active:scale-[0.99] md:p-5",
+        "group tile-glow relative flex flex-col gap-3 rounded-2xl border border-border/60 bg-panel p-4 active:scale-[0.99] md:p-5",
         "shadow-[0_1px_2px_rgba(16,10,0,0.04),0_8px_24px_-16px_rgba(16,10,0,0.08)]",
         "transition-all duration-200",
-        "hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-[0_2px_4px_rgba(16,10,0,0.04),0_16px_32px_-12px_rgba(16,10,0,0.14)]"
+        "hover:-translate-y-0.5 hover:border-foreground/25 hover:shadow-[0_2px_4px_rgba(16,10,0,0.04),0_16px_32px_-12px_rgba(16,10,0,0.14)]"
       )}
     >
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <h3
             className={cn(
-              "line-clamp-2 min-w-0 flex-1 font-semibold leading-tight tracking-tight text-foreground",
+              "line-clamp-2 min-w-0 flex-1 font-bold leading-tight tracking-tight text-foreground",
               emphasis === "primary" ? "text-[16px]" : "text-[15px]"
             )}
           >

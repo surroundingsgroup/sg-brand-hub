@@ -7,6 +7,7 @@ import { fetchDealSnapshot } from "@/lib/monday/deals";
 import { ensureBrandFolderTree } from "@/lib/dropbox/client";
 import type { BrandLite } from "@/lib/brands/create-from-deal";
 import { alertError } from "@/lib/notifications/alert";
+import { isEnumRejection, verticalFallback } from "@/types/brand";
 
 export async function POST(request: Request) {
   let raw: unknown;
@@ -132,6 +133,16 @@ export async function POST(request: Request) {
     ? intakeRow
     : { ...intakeRow, engagement_type: "prospect" };
   let { data, error } = await supabase.from("brands").insert(firstTry).select("id").single();
+  // A vertical the database list does not know yet (Hospitality / Luxury
+  // Goods before the enum is extended): store it as Other + its label.
+  if (error && isEnumRejection(error.message)) {
+    const fallback = verticalFallback(v.vertical);
+    if (fallback) {
+      Object.assign(intakeRow, fallback);
+      Object.assign(firstTry, fallback);
+      ({ data, error } = await supabase.from("brands").insert(firstTry).select("id").single());
+    }
+  }
   if (error && !sourceDealId && /enum|engagement_type/i.test(error.message)) {
     ({ data, error } = await supabase.from("brands").insert(intakeRow).select("id").single());
   }

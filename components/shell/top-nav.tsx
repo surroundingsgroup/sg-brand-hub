@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Users, Briefcase, ChevronLeft } from "lucide-react";
+import { LogOut, Users, Briefcase, ChevronLeft, Activity } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,19 +86,21 @@ function mobileHeader(pathname: string): {
   }
   if (seg[0] === "brand") return { title: "Brand", parent: { href: "/dashboard", label: "Clients" } };
   if (seg[0] === "import") return { title: "Import", parent: { href: "/dashboard", label: "Clients" } };
+  if (seg[0] === "accounts") return { title: "Account health", parent: { href: "/dashboard", label: "Clients" } };
   if (seg[0] === "my" && seg[1]) return { title: MY_TITLES[seg[1]] ?? "My Surroundings", parent: { href: "/my", label: "Back" } };
   // The title already carries the name, so the wordmark steps aside here.
   if (seg[0] === "my") return { title: "My Surroundings", hideWordmark: true };
   return { title: "Clients" };
 }
 
-export function TopNav({ email }: { email: string }) {
+export function TopNav({ email, admin = false }: { email: string; admin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const mobile = mobileHeader(pathname);
   const crumbs = buildCrumbs(pathname);
   const onClientHub = isClientHubPath(pathname);
   const onMyHub = isMyHubPath(pathname);
+  const onAccounts = pathname === "/accounts" || pathname.startsWith("/accounts/");
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-panel/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-panel/80">
@@ -140,6 +143,14 @@ export function TopNav({ email }: { email: string }) {
               icon={<Briefcase className="h-3.5 w-3.5" />}
               active={onClientHub}
             />
+            {admin ? (
+              <TabLink
+                href="/accounts"
+                label="Account health"
+                icon={<Activity className="h-3.5 w-3.5" />}
+                active={onAccounts}
+              />
+            ) : null}
             <TabLink
               href="/my"
               label="My Surroundings"
@@ -178,7 +189,9 @@ export function TopNav({ email }: { email: string }) {
           ) : null}
         </div>
 
-        {/* Right: account menu */}
+        {/* Right: theme switch + account menu */}
+        <div className="flex items-center gap-1.5">
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -211,6 +224,7 @@ export function TopNav({ email }: { email: string }) {
             </form>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </header>
   );

@@ -4,6 +4,7 @@ import { isEmailAllowed } from "@/lib/auth/domain";
 import { TopNav } from "@/components/shell/top-nav";
 import { ProfileNudge } from "@/components/shell/profile-nudge";
 import { MobileTabBar } from "@/components/shell/mobile-shell";
+import { getViewer } from "@/lib/access";
 
 export default async function InternalLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient();
@@ -30,13 +31,16 @@ export default async function InternalLayout({ children }: { children: React.Rea
     if (!me?.title) needs.push("title");
   }
 
+  // Account health (and what sits under it) only shows for admins.
+  const admin = (await getViewer(supabase)).everyone;
+
   return (
     <div className="min-h-screen bg-canvas">
-      <TopNav email={email ?? ""} />
+      <TopNav email={email ?? ""} admin={admin} />
       <ProfileNudge email={email} needs={needs} />
       {/* On phones, leave room for the fixed bottom tab bar (+ home indicator). */}
       <main className="pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
-      <MobileTabBar email={email ?? ""} />
+      <MobileTabBar email={email ?? ""} admin={admin} />
     </div>
   );
 }

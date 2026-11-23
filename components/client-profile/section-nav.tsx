@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const SHORT: Record<string, string> = {
+  "projects & briefs": "Projects",
   "scope & contract health": "Scope",
   "files & documents": "Files",
   "industry update": "Industry",

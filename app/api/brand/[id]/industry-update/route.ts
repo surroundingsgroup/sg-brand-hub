@@ -33,7 +33,7 @@ export async function POST(
   const supabase = createSupabaseServerClient();
   const { data: brand, error } = await supabase
     .from("brands")
-    .select("business_name, vertical, look_and_feel, audience_type")
+    .select("business_name, vertical, look_and_feel, audience_type, industry_update")
     .eq("id", params.id)
     .single();
   if (error || !brand) {
@@ -43,7 +43,7 @@ export async function POST(
   const vertical = (brand.vertical as string | null)?.replace(/_/g, " ") ?? "their industry";
   const client = brand.business_name as string;
 
-  const system = `You brief the Surroundings Group creative team on what's happening in a client's industry — fresh inspiration, competitor moves, aesthetic trends. Tone: senior creative director. Direct, specific, no fluff. No corporate buzzwords ("synergy", "leverage", "unleash"). Each item should feel like a tip, not a press release.`;
+  const system = `You brief the Surroundings Group creative team on what's happening in a client's industry — fresh inspiration, competitor moves, aesthetic trends. Tone: senior creative director. Direct, specific, no fluff. No corporate buzzwords ("synergy", "leverage", "unleash"). Each item should feel like a tip, not a press release. House style: never use em dashes or en dashes; write with commas, periods and short sentences instead.`;
 
   const prompt = `Client: ${client}
 Vertical: ${vertical}
@@ -56,13 +56,7 @@ Each item is:
 - headline: punchy, max 8 words
 - body: 2–3 sentences. Specific. If you name a brand/campaign, name it.
 
-Return ONLY a JSON object inside <json>...</json> tags:
-
-{
-  "items": [
-    { "kind": "inspiration" | "competitor", "headline": "...", "body": "..." }
-  ]
-}`;
+Return the four notes as "items", each with its kind ("inspiration" or "competitor"), headline and body.`;
 
   const client_api = new Anthropic({ apiKey: key });
 
@@ -70,10 +64,46 @@ Return ONLY a JSON object inside <json>...</json> tags:
   try {
     const resp = await client_api.messages.create({
       model: "claude-opus-5",
-      max_tokens: 1500,
+      // The model thinks before it answers, and that thinking comes out of
+      // this same allowance. At 1,500 the answer was being cut off mid-way,
+      // which is what "Model output wasn't valid JSON" was. Leave it room.
+      max_tokens: 16000,
+      // The answer is held to this shape, so it always parses.
+      output_config: {
+        effort: "medium",
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["items"],
+            properties: {
+              items: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["kind", "headline", "body"],
+                  properties: {
+                    kind: { type: "string", enum: ["inspiration", "competitor"] },
+                    headline: { type: "string" },
+                    body: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       system,
       messages: [{ role: "user", content: prompt }],
     });
+    if (resp.stop_reason === "refusal") {
+      return NextResponse.json({ error: "The model declined this one. Try again." }, { status: 502 });
+    }
+    if (resp.stop_reason === "max_tokens") {
+      return NextResponse.json({ error: "The notes ran too long. Try again." }, { status: 502 });
+    }
     for (const part of resp.content) {
       if (part.type === "text") raw += part.text;
     }
@@ -117,7 +147,10 @@ Return ONLY a JSON object inside <json>...</json> tags:
           const headline = typeof row.headline === "string" ? row.headline.trim() : "";
           const body = typeof row.body === "string" ? row.body.trim() : "";
           if (!headline || !body) return null;
-          return { kind, headline: headline.slice(0, 120), body: body.slice(0, 600) };
+          // House style: no em or en dashes, even if one slips through.
+          const noDash = (t: string) =>
+            t.replace(/\s*[\u2014\u2013]\s*/g, ", ").replace(/,\s*,/g, ",").replace(/,\s*([.!?])/g, "$1");
+          return { kind, headline: noDash(headline).slice(0, 120), body: noDash(body).slice(0, 600) };
         })
         .filter((x): x is IndustryItem => x !== null)
         .slice(0, 6)
@@ -137,7 +170,8 @@ Return ONLY a JSON object inside <json>...</json> tags:
 
   const { error: writeErr } = await supabase
     .from("brands")
-    .update({ industry_update: payload })
+    // Regenerating the notes never touches what the team (or the connector) has saved.
+    .update({ industry_update: { ...payload, saved: (brand.industry_update as { saved?: unknown } | null)?.saved ?? [] } })
     .eq("id", params.id);
   if (writeErr) {
     console.error("[industry-update] write error:", writeErr.message);

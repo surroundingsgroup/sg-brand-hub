@@ -18,44 +18,68 @@ export const ENGAGEMENT_DESCRIPTIONS: Record<EngagementType, string> = {
   inactive: "No longer active",
 };
 
+// Verticals — one list everywhere. The wording and order follow the "Vertical"
+// column on the Monday Deals board (the agency's unified classification), and
+// the website's vertical pages use the same eight.
 export type BrandVertical =
   | "marine"
-  | "private_aviation"
-  | "automotive"
   | "real_estate"
-  | "real_estate_development"
   | "multifamily_residential"
+  | "private_aviation"
   | "resort_travel"
-  | "home_services"
+  | "hospitality"
+  | "automotive"
+  | "luxury_goods"
   | "other"
-  // legacy — kept for backwards compatibility with any existing records
-  | "luxury_real_estate";
+  // legacy — no longer offered, kept so older records still read correctly
+  | "real_estate_development"
+  | "luxury_real_estate"
+  | "home_services";
 
 export const VERTICAL_LABELS: Record<BrandVertical, string> = {
   marine: "Marine",
+  real_estate: "Real Estate & Development",
+  multifamily_residential: "Multifamily",
   private_aviation: "Private Aviation",
+  resort_travel: "Resorts & Travel",
+  hospitality: "Hospitality & Experiences",
   automotive: "Automotive",
-  real_estate: "Real Estate",
-  real_estate_development: "Real Estate Development",
-  multifamily_residential: "Multifamily Residential",
-  resort_travel: "Resort & Travel",
-  home_services: "Home Services",
+  luxury_goods: "Luxury Goods",
   other: "Other",
-  luxury_real_estate: "Luxury Real Estate",
+  // legacy
+  real_estate_development: "Real Estate & Development",
+  luxury_real_estate: "Real Estate & Development",
+  home_services: "Home Services",
 };
 
-// Verticals shown in the public intake dropdown — excludes the legacy entry.
+// What the dropdowns offer, in the Monday order.
 export const SELECTABLE_VERTICALS: BrandVertical[] = [
   "marine",
-  "private_aviation",
-  "automotive",
   "real_estate",
-  "real_estate_development",
   "multifamily_residential",
+  "private_aviation",
   "resort_travel",
-  "home_services",
+  "hospitality",
+  "automotive",
+  "luxury_goods",
   "other",
 ];
+
+// The two verticals added on 2026-11-22. The database column is a fixed list
+// (a Postgres enum), so they only save once that list has been extended
+// (supabase/migrations/20261122140000_vertical_unify.sql). Until then a save
+// falls back to Other + the label in vertical_other, so nothing errors.
+export const NEW_VERTICALS: BrandVertical[] = ["hospitality", "luxury_goods"];
+
+export function isEnumRejection(message: string | null | undefined): boolean {
+  return /invalid input value for enum brand_vertical/i.test(message ?? "");
+}
+
+/** What to store instead when the database does not know a new vertical yet. */
+export function verticalFallback(v: string | null | undefined): { vertical: "other"; vertical_other: string } | null {
+  if (!v || !(NEW_VERTICALS as string[]).includes(v)) return null;
+  return { vertical: "other", vertical_other: VERTICAL_LABELS[v as BrandVertical] };
+}
 
 export const STATUS_LABELS: Record<BrandStatus, string> = {
   draft: "Draft",

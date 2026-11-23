@@ -137,7 +137,8 @@ Rules:
   try {
     const resp = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 3000,
+      // Room for the model's thinking as well as its answer (3,000 could cut the answer off).
+      max_tokens: 16000,
       system,
       messages: [{ role: "user", content: userMsg }],
     });

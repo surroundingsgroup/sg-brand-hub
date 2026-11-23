@@ -107,9 +107,28 @@ const EMPTY: ClientBoardData = {
   ok: true,
 };
 
-export async function fetchClientBoardData(brandName: string): Promise<ClientBoardData> {
+// A client's board is found by its name. When the board is named differently
+// from the client ("Bertram" for Bertram Yachts, "Vollmer Development" for
+// Vollmer Real Estate), the board id saved on the client record is used, but
+// only when that board is plainly this client's: the two names start with
+// the same word. (A saved id can be wrong; some point at another client.)
+async function linkedBoardIfSameClient(brandName: string, linkedBoardId: string | number | null | undefined): Promise<string | null> {
+  const id = linkedBoardId ? String(linkedBoardId).trim() : "";
+  if (!/^\d+$/.test(id)) return null;
   try {
-    const boardId = await findClientBoardId(brandName);
+    const data = await mondayFetch<{ boards: Array<{ id: string; name: string }> }>(`query ($b: [ID!]) { boards(ids: $b) { id name } }`, { b: [id] });
+    const board = data.boards?.[0];
+    if (!board) return null;
+    const first = (t: string) => t.trim().toLowerCase().split(/[^a-z0-9]+/)[0];
+    return first(board.name) && first(board.name) === first(brandName) ? String(board.id) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchClientBoardData(brandName: string, linkedBoardId?: string | number | null): Promise<ClientBoardData> {
+  try {
+    const boardId = (await findClientBoardId(brandName)) ?? (await linkedBoardIfSameClient(brandName, linkedBoardId));
     if (!boardId) return { ...EMPTY, found: false };
 
     const data = await mondayFetch<{

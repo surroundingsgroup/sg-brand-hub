@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Brand, BrandColor, BrandFont } from "@/types/brand";
+import { isEnumRejection, verticalFallback } from "@/types/brand";
 import {
   createIntakeItem,
   updateIntakeColumns,
@@ -102,7 +103,15 @@ export async function updateBrand(id: string, patch: BrandPatch) {
     (effectivePatch as Record<string, unknown>).am = patch.account_manager ?? null;
   }
 
-  const { error } = await supabase.from("brands").update(effectivePatch).eq("id", id);
+  let { error } = await supabase.from("brands").update(effectivePatch).eq("id", id);
+  // A vertical the database list does not know yet (see NEW_VERTICALS): save
+  // it as Other + its label instead of failing.
+  if (error && isEnumRejection(error.message)) {
+    const fallback = verticalFallback(patch.vertical);
+    if (fallback) {
+      ({ error } = await supabase.from("brands").update({ ...effectivePatch, ...fallback }).eq("id", id));
+    }
+  }
   if (error) return { ok: false as const, error: error.message };
 
   await supabase.from("brand_activity_log").insert({

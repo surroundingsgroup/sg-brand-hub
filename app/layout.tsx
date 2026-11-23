@@ -26,9 +26,16 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
 };
 
+const THEME_SCRIPT = `(function(){try{if(/^\\/(intake|thanks|share|login)(\\/|$)/.test(location.pathname))return;if(localStorage.getItem("sg-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Apply the saved dark theme before the page paints. Team pages only:
+            client-facing pages (intake, share links, sign-in) stay light. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         {children}
         <Toaster />

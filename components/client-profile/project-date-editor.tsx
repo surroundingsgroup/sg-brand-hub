@@ -13,7 +13,11 @@ import { changeProjectShootDateAction } from "@/app/(internal)/client/[id]/proje
 
 function formatShoot(dateIso: string | null): string {
   if (!dateIso) return "Set date";
-  const d = new Date(dateIso);
+  // A date with no time ("2026-10-16") is a calendar day. Read plainly it
+  // means midnight UTC, which is the evening BEFORE in US time zones: the
+  // browser showed Oct 15 while the server had written Oct 16. Anchor it to
+  // noon so every time zone shows the same day.
+  const d = new Date(dateIso.length <= 10 ? `${dateIso}T12:00:00` : dateIso);
   if (isNaN(d.getTime())) return "Set date";
   const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const hasTime = /T\d{2}:\d{2}/.test(dateIso);

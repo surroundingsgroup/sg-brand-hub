@@ -20,7 +20,7 @@ import { ShareLinkButton } from "@/components/brand/share-link-button";
 import { DeleteBrandButton } from "@/components/brand/delete-brand-button";
 import { RequestVideoAssetsButton } from "@/components/brand/request-video-assets-button";
 import { updateBrand, deleteLogo, reorderLogos } from "./actions";
-import { VERTICAL_LABELS, ENGAGEMENT_LABELS, type Brand, type BrandLogo, type BrandActivityLog } from "@/types/brand";
+import { VERTICAL_LABELS, SELECTABLE_VERTICALS, ENGAGEMENT_LABELS, type Brand, type BrandLogo, type BrandActivityLog } from "@/types/brand";
 import { formatRelativeDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -53,17 +53,15 @@ export default async function BrandDetailPage({
     ? undefined
     : `Missing required: ${checklist.required.filter((i) => !i.done).map((i) => i.label).join(", ")}`;
 
+  // The unified list (same as the Monday Deals board). A record still filed
+  // under a retired vertical keeps showing it until someone re-files it.
   const verticalOptions = [
-    "marine",
-    "private_aviation",
-    "automotive",
-    "real_estate",
-    "real_estate_development",
-    "multifamily_residential",
-    "resort_travel",
-    "home_services",
-    "other",
-  ].map((value) => ({ value, label: VERTICAL_LABELS[value as keyof typeof VERTICAL_LABELS] }));
+    ...SELECTABLE_VERTICALS,
+    ...(b.vertical && !SELECTABLE_VERTICALS.includes(b.vertical) ? [b.vertical] : []),
+  ].map((value) => ({
+    value,
+    label: SELECTABLE_VERTICALS.includes(value) ? VERTICAL_LABELS[value] : `${VERTICAL_LABELS[value]} (old list)`,
+  }));
 
   // Back-link target. Default = dashboard. If the URL carries
   // ?from=client, return to that client's Hub profile — this is the

@@ -43,6 +43,10 @@ export type ContractPace = {
   unitLabel: string; // "Month", "Quarter", ...
   delta: number; // done - expectedToDate (negative = behind)
   status: PaceStatus;
+  // Periods at the start of the term that fall before the Monday board's
+  // records begin. They are left out of done / expected / total: the board
+  // cannot say whether those shoots happened, so they are not called missed.
+  unrecorded: number;
 };
 
 function day(iso: string): Date | null {
@@ -71,10 +75,35 @@ function daysBetween(a: Date, b: Date): number {
   return Math.max(0, Math.floor((b.getTime() - a.getTime()) / 86400000));
 }
 
+// ── Where the board's records begin ──────────────────────────────────────────
+// Shoots are counted from the Monday All Projects board, and that board only
+// goes back so far (older projects are archived off it). A contract that
+// started before then has periods the board cannot speak to:
+//   • a period that ended before the records begin is "no record": left out
+//     of done / expected / total, never called missed;
+//   • the one period the records begin partway through keeps the shoots the
+//     board does show, but is never called short (its owed count is capped at
+//     what was found), since a shoot from its early part would not be there.
+type RecordCover = { full: number; partial: boolean };
+
+function recordCover(
+  start: Date,
+  monthsPer: number | undefined,
+  daysPer: number | undefined,
+  recordsFrom: Date | null
+): RecordCover {
+  if (!recordsFrom || recordsFrom <= start) return { full: 0, partial: false };
+  const ps = (i: number) => (monthsPer ? addMonths(start, i * monthsPer) : new Date(start.getTime() + i * daysPer! * 86400000));
+  let full = 0;
+  while (full < 600 && ps(full + 1) <= recordsFrom) full++;
+  return { full, partial: ps(full) < recordsFrom };
+}
+
 export function contractPace(
   scope: BrandScope | null | undefined,
   shootDates: string[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  opts: { recordsFrom?: string | null } = {}
 ): ContractPace | null {
   if (!scope?.start_date || !scope.shoot_cadence) return null;
   const rate = scope.shoots_per_period ?? 0;
@@ -104,7 +133,10 @@ export function contractPace(
   };
 
   const periodCount = endExclusive ? Math.max(1, periodsBetween(start, endExclusive, true)) : null;
-  const total = periodCount != null ? periodCount * rate : null;
+  // What the board's records cover of this term (see recordCover).
+  const cover = recordCover(start, monthsPer, daysPer, opts.recordsFrom ? day(opts.recordsFrom) : null);
+  const pStart = (i: number) => (monthsPer ? addMonths(start, i * monthsPer) : new Date(start.getTime() + i * daysPer! * 86400000));
+  const countFrom = pStart(cover.full);
   const unitLabel = UNIT_LABEL[scope.shoot_cadence] ?? "Period";
 
   if (today < start) {
@@ -112,12 +144,13 @@ export function contractPace(
       done: 0,
       expectedToDate: 0,
       inProgressQuota: 0,
-      total,
+      total: periodCount != null ? periodCount * rate : null,
       periodIndex: 0,
       periodCount,
       unitLabel,
       delta: 0,
       status: "not_started",
+      unrecorded: 0,
     };
   }
 
@@ -126,7 +159,6 @@ export function contractPace(
 
   let completed = periodsBetween(start, asOf, false);
   if (periodCount != null) completed = Math.min(completed, periodCount);
-  const expectedToDate = completed * rate;
   const inProgressQuota = termOver ? 0 : rate;
   const periodIndex = termOver ? (periodCount ?? completed) : completed + 1;
 
@@ -134,17 +166,38 @@ export function contractPace(
   const windowEnd = termOver ? endExclusive! : new Date(today.getTime() + 86400000 / 2); // through end of today
   const done = shootDates.filter((iso) => {
     const d = day(iso);
-    return !!d && d >= start && d < windowEnd;
+    return !!d && d >= countFrom && d < windowEnd;
   }).length;
+
+  // The period the records begin partway through is held only to the shoots
+  // the board shows in it.
+  const partialEnd = cover.partial ? pStart(cover.full + 1) : null;
+  const inPartial = cover.partial
+    ? shootDates.filter((iso) => {
+        const d = day(iso);
+        return !!d && d >= countFrom && d < partialEnd! && d < windowEnd;
+      }).length
+    : 0;
+  const allBeforeRecords = periodCount != null && cover.full >= periodCount;
+  const partialGap = cover.partial && !allBeforeRecords ? rate - Math.min(rate, inPartial) : 0;
+  const unrecorded = cover.full + (cover.partial && inPartial === 0 ? 1 : 0);
+  const total = periodCount != null ? Math.max(0, (periodCount - cover.full) * rate - partialGap) : null;
+  const expectedToDate = Math.max(0, (completed - cover.full) * rate - (completed > cover.full ? partialGap : 0));
 
   const delta = done - expectedToDate;
   let status: PaceStatus;
-  if (termOver) status = total != null && done >= total ? "complete" : "behind";
+  // A term the board only partly covers is never called "complete": what is
+  // on record may all be done, but the earlier part cannot be checked.
+  const fullyOnRecord = cover.full === 0 && !cover.partial;
+  if (termOver) {
+    if (total != null && total > 0 && done >= total) status = fullyOnRecord ? "complete" : "on_track";
+    else status = "behind";
+  }
   else if (delta < 0) status = "behind";
   else if (done > expectedToDate + inProgressQuota) status = "ahead";
   else status = "on_track";
 
-  return { done, expectedToDate, inProgressQuota, total, periodIndex, periodCount, unitLabel, delta, status };
+  return { done, expectedToDate, inProgressQuota, total, periodIndex, periodCount, unitLabel, delta, status, unrecorded };
 }
 
 // ── What counts as a shoot ───────────────────────────────────────────────────
@@ -164,6 +217,11 @@ const SHOOT_TYPES = new Set([
   "social media content session",
   "event coverage package",
   "custom package",
+  // Billy, 2026-11-22: show packages and standard listings count as contract
+  // shoots too.
+  "show package with one day coverage",
+  "show package with three day coverage",
+  "standard listing",
 ]);
 
 export function projectKind(projectType: string | null | undefined): ProjectKind {
@@ -212,11 +270,14 @@ export function kindCountsInContract(
 // list behind the "Contract to date" numbers.
 export type ContractPeriod = {
   index: number; // 1-based
+  start: string; // first day, YYYY-MM-DD
+  end: string; // last day, YYYY-MM-DD
   label: string; // "April 2026", or a date range when periods aren't calendar months
   short: string; // column caption for the contract calendar: "Apr", or "4/6" for weekly periods
   owed: number;
   inProgress: boolean; // the current, unfinished period
   future: boolean; // hasn't started yet (only present with includeFuture)
+  noRecord: boolean; // began before the Monday board's records do: not judged
   scheduled: DatedProject[]; // shoots on Monday with a date still ahead of today
   shoots: DatedProject[];
   micro: DatedProject[];
@@ -229,7 +290,8 @@ export function contractPeriods(
   now: Date = new Date(),
   // includeFuture: also return the periods still to come, up to the end of the
   // term (needs an end date) — the full contract laid out, for the calendar.
-  opts: { includeFuture?: boolean } = {}
+  // recordsFrom: the day the Monday board's records begin (see above).
+  opts: { includeFuture?: boolean; recordsFrom?: string | null } = {}
 ): ContractPeriod[] | null {
   if (!scope?.start_date || !scope.shoot_cadence) return null;
   const rate = scope.shoots_per_period ?? 0;
@@ -251,6 +313,7 @@ export function contractPeriods(
 
   const periodStart = (i: number): Date =>
     monthsPer ? addMonths(start, i * monthsPer) : new Date(start.getTime() + i * daysPer! * 86400000);
+  const cover = recordCover(start, monthsPer, daysPer, opts.recordsFrom ? day(opts.recordsFrom) : null);
   const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-US", opts);
 
   const dated = projects
@@ -271,16 +334,23 @@ export function contractPeriods(
     const inRange = sorted.filter((x) => x.d >= ps && x.d < pe).map((x) => x.p);
     const calendarMonth = monthsPer === 1 && start.getDate() === 1;
     const lastDay = new Date(pe.getTime() - 86400000);
+    const shootsHere = inRange.filter((x) => x.kind === "shoot");
+    const partial = cover.partial && i === cover.full;
     out.push({
       index: i + 1,
+      start: `${ps.getFullYear()}-${String(ps.getMonth() + 1).padStart(2, "0")}-${String(ps.getDate()).padStart(2, "0")}`,
+      end: `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`,
       label: calendarMonth
         ? fmt(ps, { month: "long", year: "numeric" })
         : `${fmt(ps, { month: "short", day: "numeric" })} – ${fmt(lastDay, { month: "short", day: "numeric", year: "numeric" })}`,
       short: monthsPer ? fmt(ps, { month: "short" }) : `${ps.getMonth() + 1}/${ps.getDate()}`,
-      owed: rate,
+      // The period the records begin partway through is held only to the
+      // shoots the board shows in it.
+      owed: partial && shootsHere.length > 0 ? Math.min(rate, shootsHere.length) : rate,
       inProgress: !future && !termOver && pe > today,
       future,
-      shoots: inRange.filter((x) => x.kind === "shoot"),
+      noRecord: i < cover.full || (partial && shootsHere.length === 0),
+      shoots: shootsHere,
       micro: inRange.filter((x) => x.kind === "micro"),
       edits: inRange.filter((x) => x.kind === "edit"),
       scheduled: upcoming.filter((x) => x.d >= ps && x.d < pe).map((x) => x.p),
@@ -322,6 +392,10 @@ export function periodHealth(current: ContractPeriod | null | undefined): Health
 export function contractHealth(pace: ContractPace, opts: { renewalOverdue?: boolean } = {}): Health {
   if (pace.status === "complete") return { level: "green", label: "Contract fulfilled" };
   if (opts.renewalOverdue) return { level: "red", label: "Renewal date has passed" };
+  // The whole term is older than the board's records: nothing to judge it by.
+  if (pace.unrecorded > 0 && pace.total === 0) {
+    return { level: "yellow", label: "No record to check", reason: "The Monday board has no projects from this contract's term." };
+  }
   // Term over (nothing in progress) and still short.
   if (pace.status === "behind" && pace.inProgressQuota === 0) {
     return {
@@ -375,6 +449,11 @@ export function contractBalance(periods: ContractPeriod[]): ContractBalance {
 
   for (const per of periods) {
     if (per.future) continue;
+    // No record on the board for this period: neither short nor extra.
+    if (per.noRecord) {
+      byIndex[per.index] = { madeUp: 0, missed: 0, extra: 0, coveredBy: [] };
+      continue;
+    }
     const done = per.shoots.length;
     const extra = Math.max(0, done - per.owed);
     const short = per.inProgress ? 0 : Math.max(0, per.owed - done);

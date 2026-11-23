@@ -18,7 +18,6 @@ type PatchBody = {
   department?: string | null;
   employment_type?: string | null;
   phone?: string | null;
-  pronouns?: string | null;
   slack_handle?: string | null;
   time_zone?: string | null;
   location?: string | null;
@@ -108,7 +107,6 @@ export async function POST(req: NextRequest) {
     department: body.department?.toString().trim() || null,
     employment_type: empType,
     phone: body.phone?.toString().trim() || null,
-    pronouns: body.pronouns?.toString().trim() || null,
     slack_handle: body.slack_handle?.toString().trim() || null,
     time_zone: body.time_zone?.toString().trim() || null,
     location: body.location?.toString().trim() || null,

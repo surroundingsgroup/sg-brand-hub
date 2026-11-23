@@ -26,6 +26,21 @@ export type HubProject = {
   dropboxUrl: string | null;
   mondayUrl: string;
   updatedAt: string;
+  // The project's sub-items on Monday (its deliverables and tasks). Only
+  // loaded when asked for (the client page), to keep the bulk reads light.
+  subitems?: HubSubitem[];
+};
+
+export type HubSubitem = {
+  id: string;
+  name: string;
+  taskType: string | null; // "Content Shoot", "Video Edit", ...
+  status: string | null; // Task Status
+  owner: string | null;
+  due: string | null; // YYYY-MM-DD
+  // The "Deliverable Link" on the sub-item: the actual file (Canva, Dropbox,
+  // Frame...). Null until somebody has put the link on Monday.
+  deliverableUrl: string | null;
 };
 
 export type ProjectsForClient = {
@@ -62,8 +77,13 @@ function parseLinkColumn(raw: string | null): string | null {
 }
 
 export async function fetchProjectsForClient(
-  brandName: string
+  brandName: string,
+  opts: { withSubitems?: boolean } = {}
 ): Promise<ProjectsForClient> {
+  // Sub-item columns (board 7006063086): Task Type, Task Status, owner, due.
+  const subitemFields = opts.withSubitems
+    ? `subitems { id name column_values(ids: ["dup__of_auto_schedule", "status2", "person", "date__1", "link"]) { id text value } }`
+    : "";
   const token = process.env.MONDAY_API_TOKEN;
   const boardId = process.env.MONDAY_BOARD_ID_ALL_PROJECTS;
   if (!token || !boardId) {
@@ -95,6 +115,7 @@ export async function fetchProjectsForClient(
                 text
                 value
               }
+              ${subitemFields}
             }
           }
         }`,
@@ -119,6 +140,7 @@ export async function fetchProjectsForClient(
             updated_at: string;
             group: { title: string };
             column_values: Array<{ id: string; text: string | null; value: string | null }>;
+            subitems?: Array<{ id: string; name: string; column_values: Array<{ id: string; text: string | null; value?: string | null }> }>;
           }>;
         };
       };
@@ -150,6 +172,22 @@ export async function fetchProjectsForClient(
         dropboxUrl: parseLinkColumn(col("link8")?.value ?? null),
         mondayUrl: `https://nauticalnetwork.monday.com/boards/${boardId}/pulses/${it.id}`,
         updatedAt: it.updated_at,
+        subitems: it.subitems?.map((sub) => {
+          const sv = (id: string) => sub.column_values.find((c) => c.id === id)?.text?.trim() || null;
+          return {
+            id: String(sub.id),
+            name: sub.name,
+            taskType: sv("dup__of_auto_schedule"),
+            status: sv("status2"),
+            owner: sv("person"),
+            due: sv("date__1")?.slice(0, 10) ?? null,
+            deliverableUrl: (() => {
+              // Only a real web address is ever used as a link.
+              const url = parseLinkColumn(sub.column_values.find((c) => c.id === "link")?.value ?? null);
+              return url && /^https?:\/\//i.test(url) ? url : null;
+            })(),
+          };
+        }),
       };
     });
 
@@ -160,6 +198,49 @@ export async function fetchProjectsForClient(
 }
 
 /** Split projects into the buckets the tile renders. */
+// The day the All Projects board's records begin, as YYYY-MM-DD (null when
+// Monday cannot be reached).
+//
+// Shoots are counted from this board, and it only goes back so far: older
+// projects are archived off it, and an archived project cannot be listed. A
+// contract that started before then has periods the board cannot speak to;
+// the contract maths (lib/scope/pace.ts) leaves those out instead of calling
+// them missed. Worked out from the board itself, so it stays right when old
+// projects are archived again.
+export async function fetchBoardRecordsFrom(): Promise<string | null> {
+  const token = process.env.MONDAY_API_TOKEN;
+  const boardId = process.env.MONDAY_BOARD_ID_ALL_PROJECTS;
+  if (!token || !boardId) return null;
+  try {
+    const res = await fetch(MONDAY_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: token, "API-Version": "2024-10" },
+      body: JSON.stringify({
+        query: `query BoardRecordsFrom($b: [ID!]) { boards(ids: $b) { items_page(limit: 25, query_params: { rules: [{ column_id: "date4", compare_value: [], operator: is_not_empty }], order_by: [{ column_id: "date4", direction: asc }] }) { items { column_values(ids: ["date4"]) { text } } } } }`,
+        variables: { b: [boardId] },
+      }),
+      next: { revalidate: 21600 }, // six hours: this moves a few times a year
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      data?: { boards: { items_page: { items: { column_values: { text: string | null }[] }[] } }[] };
+    };
+    const dates = (body.data?.boards?.[0]?.items_page?.items ?? [])
+      .map((i) => (i.column_values?.[0]?.text ?? "").slice(0, 10))
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort();
+    // The first date that starts a steady run of projects (two more within a
+    // month), so one stray item with an old date does not set the mark.
+    const dayOf = (d: string) => new Date(d + "T12:00:00Z").getTime();
+    for (let i = 0; i + 2 < dates.length; i++) {
+      if (dayOf(dates[i + 2]) - dayOf(dates[i]) <= 31 * 86400000) return dates[i];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function bucketProjects(all: HubProject[]): {
   upcoming: HubProject[];
   inFlight: HubProject[];

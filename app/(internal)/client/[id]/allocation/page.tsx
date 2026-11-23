@@ -15,6 +15,8 @@ import { fetchClientBoardData, fetchAllocationSetup } from "@/lib/monday/client-
 import { fetchAllTeamMembers } from "@/lib/monday/teams";
 import { AllocationEditor, type AllocationLine } from "./allocation-editor";
 import { currentPeriod } from "@/lib/allocations/period";
+import { TARGET_BILL_RATE } from "@/lib/allocations/rate";
+import type { BrandScope } from "@/lib/scope/types";
 import { normalizeRole } from "@/lib/allocations/roles";
 import type { Brand } from "@/types/brand";
 
@@ -55,7 +57,7 @@ export default async function AllocationPage({
   const supabase = createSupabaseServerClient();
   const { data: brand } = await supabase
     .from("brands")
-    .select("id, business_name, vertical, account_manager")
+    .select("id, business_name, vertical, account_manager, scope")
     .eq("id", params.id)
     .single();
   if (!brand) notFound();
@@ -100,6 +102,54 @@ export default async function AllocationPage({
     teamMembers = [];
   }
 
+  // A new month starts from the most recent earlier month this client has
+  // (Billy: "a standard template, basically just copying the previous
+  // month"). Nothing is saved until the AM saves or submits.
+  let previous: { label: string; total: number; lines: AllocationLine[] } | null = null;
+  if (!allocation) {
+    const { data: earlier } = await supabase
+      .from("monthly_allocations")
+      .select("id, year, month, total_hours")
+      .eq("brand_id", params.id)
+      .or(`year.lt.${year},and(year.eq.${year},month.lt.${month})`)
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(6);
+    for (const prior of earlier ?? []) {
+      const { data: priorLines } = await supabase
+        .from("monthly_allocation_lines")
+        .select("task, role, owner, hours, notes, sort_order")
+        .eq("allocation_id", prior.id)
+        .order("sort_order", { ascending: true });
+      if (priorLines?.length) {
+        previous = {
+          label: new Date(prior.year, prior.month - 1, 1, 12).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+          total: Number(prior.total_hours) || priorLines.reduce((n, l) => n + Number(l.hours || 0), 0),
+          lines: priorLines.map((l) => ({
+            id: null,
+            task: l.task,
+            role: normalizeRole(l.role),
+            owner: l.owner,
+            hours: Number(l.hours),
+            notes: l.notes,
+          })),
+        };
+        break;
+      }
+    }
+  }
+
+  // No earlier month and no Monday setup: a plain starting set of rows, so
+  // the first month is never a blank table.
+  const STARTER: AllocationLine[] = [
+    { id: null, task: "Client Communication / Meetings", role: "AM", owner: b.account_manager ?? null, hours: 0, notes: null },
+    { id: null, task: "Strategy / Planning", role: "Strategy", owner: null, hours: 0, notes: null },
+    { id: null, task: "Content Shoot", role: "Production", owner: null, hours: 0, notes: null },
+    { id: null, task: "Editing / Post-Production", role: "Creative", owner: null, hours: 0, notes: null },
+    { id: null, task: "Social Media Management", role: "Social", owner: null, hours: 0, notes: null },
+    { id: null, task: "Graphic Design", role: "Graphic", owner: null, hours: 0, notes: null },
+  ];
+
   const seedLines: AllocationLine[] = allocation
     ? existingLines.map((l) => ({
         id: l.id,
@@ -109,16 +159,28 @@ export default async function AllocationPage({
         hours: Number(l.hours),
         notes: l.notes,
       }))
-    : setup.lines.map((l) => ({
-        id: null,
-        task: l.task,
-        role: normalizeRole(l.role),
-        owner: l.person || null,
-        hours: Number(l.hours),
-        notes: null,
-      }));
+    : previous
+      ? previous.lines
+      : setup.lines.length
+        ? setup.lines.map((l) => ({
+            id: null,
+            task: l.task,
+            role: normalizeRole(l.role),
+            owner: l.person || null,
+            hours: Number(l.hours),
+            notes: null,
+          }))
+        : STARTER;
 
-  const templateTotal = setup.totalHours || 0;
+  // What this month was started from, for the Template card.
+  const startedFrom: string | null = allocation
+    ? null
+    : previous
+      ? `Copied from ${previous.label}`
+      : setup.lines.length
+        ? null
+        : "Standard starting rows";
+  const templateTotal = !allocation && previous ? previous.total : setup.totalHours || 0;
 
   // Last 3 submitted months (excluding the one we're editing) — handy
   // for "last month was 74h, we're at 72h now" context.
@@ -138,6 +200,10 @@ export default async function AllocationPage({
       status: string;
       total_hours: number;
     }>;
+
+  // The monthly amount on the contract, for the real rate and the target comparison.
+  const scopeAmount = (brand as unknown as { scope?: BrandScope | null } | null)?.scope?.retainer_amount;
+  const monthlyAmount = typeof scopeAmount === "number" && scopeAmount > 0 ? scopeAmount : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -166,9 +232,12 @@ export default async function AllocationPage({
         initialStatus={allocation?.status ?? "draft"}
         submittedAt={allocation?.submitted_at ?? null}
         templateTotal={templateTotal}
-        templateFound={setup.found}
+        templateFound={setup.found || (!allocation && !!previous)}
+        startedFrom={startedFrom}
         recentMonths={recent}
         teamMembers={teamMembers.map((m) => m.name)}
+        monthly={monthlyAmount}
+        targetRate={TARGET_BILL_RATE}
       />
     </div>
   );

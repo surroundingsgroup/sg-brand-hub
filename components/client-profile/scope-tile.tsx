@@ -16,10 +16,10 @@
 // The tile takes the already-fetched Monday + SocialDesk data from the
 // parent so there's one network round-trip per profile load, not three.
 
-import { useState, useTransition } from "react";
-import { BarChart3, ChevronDown, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { BarChart3, ChevronDown, FileText, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { Tile, TileEmpty } from "./tile";
-import { saveBrandScope } from "@/app/(internal)/client/[id]/scope-actions";
+import { dismissScopeDraft, saveBrandScope } from "@/app/(internal)/client/[id]/scope-actions";
 import {
   BILLING_LABELS,
   BILLING_FREQUENCIES,
@@ -36,27 +36,14 @@ import {
   type ContractTerm,
   type DeliverableLine,
   type ScopeChannel,
+  type ScopeDraft,
   type ServiceType,
   type ShootCadence,
 } from "@/lib/scope/types";
-import {
-  contractBalance,
-  contractHealth,
-  contractPace,
-  contractPeriods,
-  kindCountsInContract,
-  periodHealth,
-  type ContractBalance,
-  type ContractPeriod,
-  type DatedProject,
-} from "@/lib/scope/pace";
+import { type ContractBalance, type ContractPeriod, type DatedProject } from "@/lib/scope/pace";
+import { daysUntil, easternToday, effectiveScope, noonOn, summarizeContract } from "@/lib/scope/summary";
+import type { SocialMonth } from "@/lib/socialdesk/fetch";
 
-function daysUntil(iso: string | undefined): number | null {
-  if (!iso) return null;
-  const then = new Date(iso + "T12:00:00").getTime();
-  if (isNaN(then)) return null;
-  return Math.round((then - Date.now()) / 86400000);
-}
 
 function Meter({ label, done, quota }: { label: string; done: number; quota: number }) {
   const pct = quota > 0 ? Math.min(100, Math.round((done / quota) * 100)) : 0;
@@ -75,10 +62,73 @@ function Meter({ label, done, quota }: { label: string; done: number; quota: num
   );
 }
 
+// How many periods of each cadence make a year, for the yearly tally.
+const PERIODS_PER_YEAR: Partial<Record<ShootCadence, number>> = {
+  weekly: 52,
+  "bi-weekly": 26,
+  monthly: 12,
+  "bi-monthly": 6,
+  quarterly: 4,
+};
+
+// ── Social posts over the contract ────────────────────────────────────────────
+// The SocialDesk tile already shows this month and next. This is the long
+// view: across the full calendar months of the term that have passed, how
+// many posts were approved on each contracted channel, against the monthly
+// minimum times those months. Months before SocialDesk has anything for the
+// client are left out (no record), the same way the shoot count treats the
+// Monday board.
+type SocialToDate = {
+  months: number;
+  fromLabel: string;
+  throughLabel: string;
+  rows: { channel: string; inFeed: { done: number; owed: number } | null; stories: { done: number; owed: number } | null }[];
+};
+
+function socialToDate(scope: BrandScope, history: SocialMonth[], todayIso: string): SocialToDate | null {
+  const channels = (scope.channels ?? []).filter((c) => c.inFeed != null || c.stories != null);
+  if (!channels.length || !scope.start_date) return null;
+  const ym = (iso: string) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
+  // First full calendar month of the term, last one that has fully passed.
+  const first = ym(scope.start_date) + (Number(scope.start_date.slice(8, 10)) > 1 ? 1 : 0);
+  let last = ym(todayIso) - 1;
+  if (scope.end_date) {
+    const end = new Date(scope.end_date.slice(0, 10) + "T12:00:00");
+    const endsOnLastDay = new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate() === end.getDate();
+    last = Math.min(last, ym(scope.end_date) - (endsOnLastDay ? 0 : 1));
+  }
+  // SocialDesk's own first month for this client.
+  const withPosts = history.filter((m) => m.built > 0).map((m) => m.year * 12 + m.month - 1);
+  const from = withPosts.length ? Math.max(first, Math.min(...withPosts)) : first;
+  const label = (k: number) => new Date(Math.floor(k / 12), k % 12, 15).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const months = Math.max(0, last - from + 1);
+  const inRange = history.filter((m) => {
+    const k = m.year * 12 + m.month - 1;
+    return k >= from && k <= last;
+  });
+  const sum = (channel: string, key: "inFeed" | "stories") => inRange.reduce((n, m) => n + (m.by_channel[channel]?.[key] ?? 0), 0);
+  return {
+    months,
+    fromLabel: label(from),
+    throughLabel: label(Math.max(from, last)),
+    rows: channels.map((c) => ({
+      channel: c.name,
+      inFeed: c.inFeed != null ? { done: sum(c.name, "inFeed"), owed: c.inFeed * months } : null,
+      stories: c.stories != null ? { done: sum(c.name, "stories"), owed: c.stories * months } : null,
+    })),
+  };
+}
+
 // ── Shoot log helpers ─────────────────────────────────────────────────────────
 function shortDate(iso: string): string {
   const d = new Date(iso.length <= 10 ? iso + "T12:00:00" : iso);
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// "Apr 29, 2026": an agreement's upload date, where the year matters.
+function fullDate(iso: string): string {
+  const d = new Date(iso.length <= 10 ? iso + "T12:00:00" : iso);
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 // Monday project names lead with the client ("Solana | IDS Event"); drop that
@@ -149,7 +199,9 @@ function ContractCalendar({ periods, balance }: { periods: ContractPeriod[]; bal
           const madeUp = bal?.madeUp ?? 0;
           const missing = per.future
             ? "border border-border"
-            : per.inProgress
+            : per.noRecord
+              ? "border border-dashed border-border bg-secondary/40"
+              : per.inProgress
               ? "border border-dashed border-amber-500 bg-amber-50"
               : "border border-destructive/60 bg-destructive/10";
           // Slot i, bottom to top: quota shoots, extra shoots, booked, then
@@ -167,7 +219,11 @@ function ContractCalendar({ periods, balance }: { periods: ContractPeriod[]; bal
           return (
             <div
               key={per.index}
-              title={`${per.label}: ${done} of ${per.owed}${booked ? `, ${booked} booked` : ""}${madeUp ? `, ${madeUp} made up later` : ""}`}
+              title={
+                per.noRecord
+                  ? `${per.label}: before the Monday board's records begin`
+                  : `${per.label}: ${done} of ${per.owed}${booked ? `, ${booked} booked` : ""}${madeUp ? `, ${madeUp} made up later` : ""}`
+              }
               className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md px-0.5 pb-1 pt-1.5 ${per.inProgress ? "bg-foreground/[0.06]" : ""}`}
             >
               <div className="flex w-full flex-col-reverse items-center gap-[3px]">
@@ -219,11 +275,250 @@ function ContractCalendar({ periods, balance }: { periods: ContractPeriod[]; bal
             Owed, not done
           </span>
         ) : null}
-        <span className="inline-flex items-center gap-1">
-          <span className="block h-2 w-2.5 rounded-[2px] border border-border" />
-          Still to come
-        </span>
+        {periods.some((per) => per.noRecord) ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="block h-2 w-2.5 rounded-[2px] border border-dashed border-border bg-secondary/40" />
+            No record on the board
+          </span>
+        ) : null}
+        {periods.some((per) => per.future) ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="block h-2 w-2.5 rounded-[2px] border border-border" />
+            Still to come
+          </span>
+        ) : null}
         {shown.length < periods.length ? <span>· showing {shown.length} of {periods.length} periods</span> : null}
+      </div>
+    </div>
+  );
+}
+
+// ── Shoots, month by month ────────────────────────────────────────────────────
+// Billy, 2026-11-22: lay the contract out a month at a time, show each shoot
+// in the month it happened, shade the months that make up a quarter (or
+// whatever the contract's period is) as one block, and let a long contract
+// scroll sideways from its start to today.
+//
+// One column per CALENDAR month, starting with the month the contract began,
+// and each shoot sits in the month it actually happened (his words: "based on
+// the shoots that are done during that month"). One box per shoot: green
+// when done, blue when booked. Each shaded block is one period's worth of
+// months with the shoots in it counted underneath ("2 of 2"). For a contract
+// that starts mid-month the blocks are the nearest whole months, so a shoot
+// in the first or last days of a period can sit one block over from where
+// the pace lights count it. Months after a lapsed term carry on in their own
+// plain block, so work that is still happening is never missing.
+const MONTHS_IN_PERIOD: Partial<Record<ShootCadence, number>> = { monthly: 1, "bi-monthly": 2, quarterly: 3 };
+
+function plusMonthsIso(iso: string, n: number): string {
+  const d = new Date(iso.slice(0, 10) + "T12:00:00");
+  d.setMonth(d.getMonth() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// One slot in a month: a shoot that happened or is booked, or a shoot the
+// contract called for that has no date (owed, made up, still to come).
+type Slot =
+  | { kind: "done" | "extra" | "booked"; p: DatedProject }
+  | { kind: "missed" | "madeup" | "due" | "later" | "none" };
+type MonthCol = { start: string; label: string; year: string | null; current: boolean; slots: Slot[] };
+type Block = { key: string; months: MonthCol[]; caption: string | null; captionTone: string; title: string; current: boolean };
+
+const SLOT_BOX = "flex h-[15px] w-full max-w-[26px] items-center justify-center rounded-[4px] text-[9px] font-semibold leading-none tabular-nums";
+const SLOT_STYLE: Record<Slot["kind"], string> = {
+  done: "bg-emerald-500 text-white",
+  extra: "bg-emerald-700 text-white",
+  booked: "border border-sky-500 bg-sky-100 text-sky-900",
+  missed: "border border-destructive/60 bg-destructive/10",
+  madeup: "border border-emerald-500 bg-emerald-100",
+  due: "border border-dashed border-amber-500 bg-amber-50",
+  later: "border border-border",
+  none: "border border-dashed border-border bg-secondary/40",
+};
+const SLOT_LEGEND: [Slot["kind"], string][] = [
+  ["done", "Shoot done (the number is the day)"],
+  ["extra", "Extra shoot"],
+  ["booked", "Booked"],
+  ["madeup", "Cleared by an extra shoot"],
+  ["missed", "Owed, not done"],
+  ["due", "Due this period"],
+  ["later", "Still to come"],
+  ["none", "No record on the board"],
+];
+
+function ShootTimeline({
+  periods,
+  balance,
+  shoots,
+  monthsPer,
+  todayIso,
+  unit,
+  afterSince,
+}: {
+  periods: ContractPeriod[];
+  balance: ContractBalance;
+  shoots: DatedProject[]; // every dated shoot for the client (and pool partner)
+  monthsPer: number;
+  todayIso: string;
+  unit: string; // "quarter", "month", ...
+  afterSince: string | null; // the term's end date, when the term has lapsed
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const firstMonth = periods[0] ? `${periods[0].start.slice(0, 7)}-01` : `${todayIso.slice(0, 7)}-01`;
+  const thisMonth = `${todayIso.slice(0, 7)}-01`;
+  const inMonth = (start: string) => {
+    const end = plusMonthsIso(start, 1);
+    return shoots
+      .filter((p) => p.date.slice(0, 10) >= start && p.date.slice(0, 10) < end)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const col = (start: string, first: boolean, slots: Slot[]): MonthCol => {
+    const d = new Date(start + "T12:00:00");
+    return {
+      start,
+      label: d.toLocaleDateString("en-US", { month: "short" }),
+      year: first || d.getMonth() === 0 ? `'${String(d.getFullYear()).slice(2)}` : null,
+      current: start === thisMonth,
+      slots,
+    };
+  };
+
+  const blocks: Block[] = periods.map((per, i) => {
+    const starts = Array.from({ length: monthsPer }, (_, k) => plusMonthsIso(firstMonth, i * monthsPer + k));
+    const perMonth = starts.map((st) => inMonth(st));
+    const done = perMonth.flat().filter((p) => p.date.slice(0, 10) <= todayIso);
+    const booked = perMonth.flat().filter((p) => p.date.slice(0, 10) > todayIso);
+    // Shoots beyond what this period called for are extras (they can clear a short period elsewhere).
+    const extras = new Set(done.slice(per.owed));
+    const isCurrent = starts.includes(thisMonth);
+    const isFuture = starts[0] > thisMonth;
+    const noRecord = per.noRecord && done.length === 0;
+    // Slots the contract called for that no dated shoot fills.
+    const open = Math.max(0, per.owed - done.length - booked.length);
+    const cleared = !isCurrent && !isFuture && !noRecord ? Math.min(open, balance.byIndex[per.index]?.madeUp ?? 0) : 0;
+    const openKinds: Slot["kind"][] = Array.from({ length: open }, (_, n) =>
+      noRecord ? "none" : isFuture ? "later" : isCurrent ? "due" : n < cleared ? "madeup" : "missed"
+    );
+    const slots: Slot[][] = perMonth.map((list) =>
+      list.map((p): Slot => ({ kind: p.date.slice(0, 10) > todayIso ? "booked" : extras.has(p) ? "extra" : "done", p }))
+    );
+    // An undated slot goes in the emptiest month of the period, left to right.
+    for (const kind of openKinds) {
+      let target = 0;
+      for (let m = 1; m < slots.length; m++) if (slots[m].length < slots[target].length) target = m;
+      slots[target].push({ kind } as Slot);
+    }
+    const short = !isCurrent && !isFuture && !noRecord && open - cleared > 0;
+    return {
+      key: `p${per.index}`,
+      months: starts.map((st, k) => col(st, i === 0 && k === 0, slots[k])),
+      caption: noRecord ? "no record" : `${done.length} of ${per.owed}`,
+      captionTone: noRecord || isFuture ? "text-muted-foreground/70" : short ? "text-destructive" : isCurrent ? "text-amber-700" : "text-emerald-700",
+      title: noRecord ? "Before the Monday board's records begin" : `${done.length} of ${per.owed} shoots`,
+      current: isCurrent,
+    };
+  });
+
+  // Months after a lapsed term, through the month we are in (or the last
+  // booked shoot), in one plain block.
+  if (afterSince && periods.length) {
+    let start = plusMonthsIso(firstMonth, periods.length * monthsPer);
+    const lastShootMonth = shoots.reduce((m, p) => (p.date.slice(0, 7) > m ? p.date.slice(0, 7) : m), todayIso.slice(0, 7));
+    const months: MonthCol[] = [];
+    for (let guard = 0; guard < 36 && start.slice(0, 7) <= lastShootMonth; guard++) {
+      months.push(col(start, false, inMonth(start).map((p): Slot => ({ kind: p.date.slice(0, 10) > todayIso ? "booked" : "done", p }))));
+      start = plusMonthsIso(start, 1);
+    }
+    if (months.length) {
+      const n = months.reduce((sum, m) => sum + m.slots.filter((x) => x.kind === "done").length, 0);
+      blocks.push({
+        key: "after",
+        months,
+        caption: `after the agreement · ${n} shoot${n === 1 ? "" : "s"}`,
+        captionTone: "text-muted-foreground",
+        title: "After the agreement on file ended",
+        current: months.some((m) => m.current),
+      });
+    }
+  }
+
+  // A long contract scrolls; start with the current month in view.
+  useEffect(() => {
+    const box = scroller.current;
+    const now = box?.querySelector<HTMLElement>("[data-current-month]");
+    if (box && now) box.scrollLeft = Math.max(0, now.offsetLeft - box.clientWidth * 0.6);
+  }, []);
+
+  const grouped = monthsPer > 1; // shaded blocks only when a period is more than one month
+  const monthCount = blocks.reduce((n, b) => n + b.months.length, 0);
+  const present = new Set(blocks.flatMap((b) => b.months.flatMap((m) => m.slots.map((x) => x.kind))));
+
+  const month = (m: MonthCol) => (
+    <div
+      key={m.start}
+      {...(m.current ? { "data-current-month": "" } : {})}
+      className={`flex min-w-0 flex-1 flex-col items-center justify-end gap-1 rounded-md px-0.5 pb-1 pt-1 ${m.current ? "bg-foreground/[0.07]" : ""}`}
+    >
+      <div className="flex min-h-[15px] w-full flex-col-reverse items-center gap-[3px]">
+        {m.slots.slice(0, 6).map((x, i) => {
+          const cls = `${SLOT_BOX} ${SLOT_STYLE[x.kind]}`;
+          if (!("p" in x)) return <span key={i} className={cls} />;
+          const tip = `${shortDate(x.p.date)}${x.kind === "booked" ? " (booked)" : ""} · ${projectLabel(x.p)}`;
+          const dayOfMonth = Number(x.p.date.slice(8, 10));
+          return x.p.url ? (
+            <a key={i} href={x.p.url} target="_blank" rel="noopener noreferrer" title={tip} className={`${cls} transition-opacity hover:opacity-70`}>
+              {dayOfMonth}
+            </a>
+          ) : (
+            <span key={i} title={tip} className={cls}>
+              {dayOfMonth}
+            </span>
+          );
+        })}
+        {m.slots.length > 6 ? <span className="text-[8px] leading-none text-muted-foreground">+{m.slots.length - 6}</span> : null}
+      </div>
+      <span className={`whitespace-nowrap text-[9px] leading-none ${m.current ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+        {m.label}
+        {m.year ? <span className="text-muted-foreground/70"> {m.year}</span> : null}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div ref={scroller} className="overflow-x-auto pb-1" role="img" aria-label="Shoots in each month of the contract">
+        <div className={`flex items-stretch ${grouped ? "gap-1.5" : "gap-0.5"}`} style={{ minWidth: `${monthCount * 3.1}rem` }}>
+          {blocks.map((b) =>
+            grouped || b.key === "after" ? (
+              // A quarter (or other multi-month period): its months shaded as one block.
+              <div
+                key={b.key}
+                title={b.title}
+                className={`flex flex-col rounded-lg border px-1 pb-1 pt-1.5 ${
+                  b.key === "after" ? "border-dashed border-border bg-transparent" : b.current ? "border-foreground/25 bg-secondary/50" : "border-border/70 bg-secondary/30"
+                }`}
+                style={{ flex: `${b.months.length} 1 0` }}
+              >
+                <div className="flex flex-1 items-stretch">{b.months.map(month)}</div>
+                {b.caption ? <div className={`mt-0.5 truncate text-center text-[9px] font-medium leading-none ${b.captionTone}`}>{b.caption}</div> : null}
+              </div>
+            ) : (
+              // Monthly contracts: just the months, no boxes around them.
+              <div key={b.key} title={b.title} className="flex" style={{ flex: "1 1 0" }}>
+                {b.months.map(month)}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+        {SLOT_LEGEND.filter(([kind]) => present.has(kind)).map(([kind, label]) => (
+          <span key={kind} className="inline-flex items-center gap-1">
+            <span className={`block h-2 w-2.5 rounded-[2px] ${SLOT_STYLE[kind].replace(/text-\S+/g, "")}`} />
+            {label}
+          </span>
+        ))}
+        {grouped ? <span>· each shaded block is one {unit}</span> : null}
       </div>
     </div>
   );
@@ -391,14 +686,22 @@ function DeliverableEditor({
 export function ScopeTile({
   brandId,
   initialScope,
-  mtdChannelCounts,
+  socialHistory = [],
+  socialConnected = false,
+  recordsFrom = null,
   datedProjects = [],
   pool = null,
   poolOptions = [],
+  today,
 }: {
   brandId: string;
   initialScope: BrandScope | null;
-  mtdChannelCounts: Record<string, { inFeed: number; stories: number }>;
+  // Posts approved each month since the contract term began, from SocialDesk.
+  socialHistory?: SocialMonth[];
+  socialConnected?: boolean;
+  // The day the Monday All Projects board's records begin (YYYY-MM-DD).
+  // Contract periods that began before it are shown as "no record".
+  recordsFrom?: string | null;
   // Every dated project for this client from the Monday All Projects board,
   // classified by Project Type (and including the pool partner's when linked).
   datedProjects?: DatedProject[];
@@ -406,12 +709,26 @@ export function ScopeTile({
   pool?: { name: string; partnerRate: number | null } | null;
   // Other clients, for the "Shared shoot pool with" picker.
   poolOptions?: { id: string; name: string }[];
+  // Today's date in New York (YYYY-MM-DD), handed down by the server so the
+  // page it sends and the page the browser builds count from the same day.
+  today?: string;
 }) {
+  const now = useMemo(() => noonOn(today ?? easternToday()), [today]);
   const [editing, setEditing] = useState(false);
   const [scope, setScope] = useState<BrandScope>(initialScope ?? {});
   const [draft, setDraft] = useState<BrandScope>(scope);
   const [pending, startTransition] = useTransition();
   const [showLog, setShowLog] = useState(false);
+  // After a save: what happened on the Monday All Accounts board.
+  const [boardNote, setBoardNote] = useState<{ ok: boolean; text: string } | null>(null);
+  // A first pass at the scope read from the signed agreement on the client's
+  // All Accounts row (lib/scope/agreement.ts). It only fills the form: nothing
+  // is saved until the account manager presses Save.
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [fromAgreement, setFromAgreement] = useState<ScopeDraft | null>(null);
+  // A draft the morning check left on this client, not yet confirmed.
+  const waiting = scope.pending_draft ?? null;
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(scope);
   const services = scope.services ?? [];
@@ -433,9 +750,16 @@ export function ScopeTile({
     startTransition(async () => {
       const result = await saveBrandScope(brandId, clean);
       if (result.ok) {
-        setScope(clean);
-        setDraft(clean);
+        // A waiting draft stays waiting unless this save was made from it.
+        const { pending_draft: _p, ...saved } = clean;
+        void _p;
+        const next: BrandScope = waiting && !result.draftCleared ? { ...saved, pending_draft: waiting } : saved;
+        setScope(next);
+        setDraft(next);
         setEditing(false);
+        setFromAgreement(null);
+        setReadError(null);
+        setBoardNote(result.board ?? null);
       }
     });
   }
@@ -443,11 +767,70 @@ export function ScopeTile({
   function cancel() {
     setDraft(scope);
     setEditing(false);
+    setFromAgreement(null);
+    setReadError(null);
+  }
+
+  // Put a drafted scope into the form. The agreement replaces the contract
+  // fields outright; what it never carries (the shared shoot pool, the fee,
+  // the app's own links) stays as it was.
+  function applyAgreement(d: ScopeDraft) {
+    setDraft((prev) => {
+      const keep: BrandScope = {};
+      if (prev.pool_with) keep.pool_with = prev.pool_with;
+      if (prev.retainer_amount != null) keep.retainer_amount = prev.retainer_amount;
+      if (prev.billing_frequency) keep.billing_frequency = prev.billing_frequency;
+      if (prev.monday_account_item_id) keep.monday_account_item_id = prev.monday_account_item_id;
+      if (prev.socialdesk_client) keep.socialdesk_client = prev.socialdesk_client;
+      // Notes somebody typed are kept under the new ones; an earlier
+      // "Entered from the agreement" line is about the old file, so it goes.
+      const earlier = prev.notes?.trim();
+      const typedNotes = earlier && !/^(Entered|Drafted) /.test(earlier) ? earlier : "";
+      const notes = [d.scope.notes, typedNotes].filter(Boolean).join("\n\n");
+      return { ...keep, ...d.scope, ...(notes ? { notes } : {}), agreement_asset_id: d.asset_id };
+    });
+    setFromAgreement(d);
+    setReadError(null);
+    setEditing(true);
+  }
+
+  async function readAgreement() {
+    setReading(true);
+    setReadError(null);
+    const failed = "The agreement could not be read just now. Try again in a minute.";
+    try {
+      const res = await fetch("/api/scope-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId }),
+      });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; draft?: ScopeDraft; error?: string } | null;
+      if (json?.ok && json.draft) applyAgreement(json.draft);
+      else setReadError(json?.error ?? failed);
+    } catch {
+      setReadError(failed);
+    } finally {
+      setReading(false);
+    }
+  }
+
+  function dismissWaiting() {
+    startTransition(async () => {
+      const result = await dismissScopeDraft(brandId);
+      if (result.ok) {
+        setScope((prev) => {
+          const { pending_draft: _p, ...rest } = prev;
+          void _p;
+          return rest;
+        });
+      }
+    });
   }
 
   // ── Readout mode ────────────────────────────────────────────────────────────
   if (!editing) {
-    const daysToRenewal = daysUntil(scope.renewal_date);
+    // Renewal clock runs on the term in force (auto-renewals rolled forward).
+    const daysToRenewal = daysUntil(effectiveScope(scope, now).renewal_date, now);
     const renewalBadge =
       daysToRenewal == null
         ? null
@@ -461,20 +844,50 @@ export function ScopeTile({
 
     const delivCount = (scope.deliverables ?? []).length + (scope.post_production ?? []).length;
 
-    // Shoots = Monday projects typed "Professional Content Shoot". With a
-    // shared pool, both clients' shoots count against the combined quota.
-    const ownRate = scope.shoots_per_period ?? 1;
-    const quota = pool ? ownRate + (pool.partnerRate ?? ownRate) : ownRate;
-    const paceScope: BrandScope = pool ? { ...scope, shoots_per_period: quota } : scope;
-    const shootDates = datedProjects.filter((p) => p.kind === "shoot").map((p) => p.date);
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
-    const shootsThisPeriod = shootDates.filter((iso) => {
-      const d = new Date(iso);
-      return !isNaN(d.getTime()) && d >= monthStart && d <= new Date();
-    }).length;
-    const kinds = kindCountsInContract(scope, datedProjects);
+    // All the contract maths lives in lib/scope/summary.ts so the all-accounts
+    // view and the morning alerts read exactly the same numbers as this tile.
+    const {
+      quota,
+      shootsThisPeriod,
+      kinds,
+      pace,
+      timeline,
+      periods,
+      lastClosed,
+      balance,
+      lastShoot,
+      nextShoot,
+      daysSinceLast,
+      remaining,
+      periodsLeft,
+      unit,
+      perPeriod,
+      monthHealth,
+      health,
+      lights,
+      records,
+      afterTerm,
+      currentPeriod,
+    } = summarizeContract(scope, datedProjects, pool, now, { recordsFrom });
+    const social = socialToDate(effectiveScope(scope, now), socialHistory, today ?? easternToday());
+    // The year at a glance: every shoot on the board this calendar year with
+    // its date, against what the cadence adds up to over a year. Quarters and
+    // months get filled in as the year goes, so this is the plain read.
+    const todayIso = today ?? easternToday();
+    // The term in force (auto-renewals rolled forward) and whether it has run out.
+    const termView = effectiveScope(scope, now);
+    const termLapsed = !!termView.end_date && termView.end_date.slice(0, 10) < todayIso;
+    const thisYear = todayIso.slice(0, 4);
+    const yearShoots = datedProjects
+      .filter((p) => p.kind === "shoot" && p.date.slice(0, 4) === thisYear)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const perYear = scope.shoot_cadence && PERIODS_PER_YEAR[scope.shoot_cadence] ? quota * (PERIODS_PER_YEAR[scope.shoot_cadence] as number) : null;
+    const yearDone = yearShoots.filter((p) => p.date.slice(0, 10) <= todayIso).length;
+    // "Jun and Aug": period captions for a list of period numbers.
+    const names = (idx: number[]) => {
+      const list = idx.map((i) => timeline.find((per) => per.index === i)?.short ?? "").filter(Boolean);
+      return list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+    };
     const extras = kinds
       ? [
           kinds.micro ? `${kinds.micro} micro shoot${kinds.micro === 1 ? "" : "s"}` : null,
@@ -485,70 +898,43 @@ export function ScopeTile({
         ].filter(Boolean)
       : [];
 
-    // Macro view: shoots owed vs done since the contract started.
-    const pace = contractPace(paceScope, shootDates);
-    // The whole term, one entry per contract period (past, current, and the
-    // ones still to come when the contract has an end date).
-    const timeline = contractPeriods(paceScope, datedProjects, new Date(), { includeFuture: true }) ?? [];
-    // The shoot log lists only what has started.
-    const periods = timeline.filter((per) => !per.future);
-    // "Due by the end of Oct" — the last period that has fully passed.
-    const lastClosed = [...periods].reverse().find((per) => !per.inProgress);
-    // Make-ups: which short periods the extra shoots have covered.
-    const balance = contractBalance(timeline);
-    const names = (idx: number[]) => {
-      const list = idx.map((i) => timeline.find((per) => per.index === i)?.short ?? "").filter(Boolean);
-      return list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
-    };
-    const shortIdx = Object.entries(balance.byIndex)
-      .filter(([, b]) => b.madeUp + b.missed > 0)
-      .map(([i]) => Number(i));
-    const coverIdx = [...new Set(Object.values(balance.byIndex).flatMap((b) => b.coveredBy))].sort((a, b) => a - b);
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-    const bankNote = balance.banked > 0 ? `${plural(balance.banked, "extra shoot")} still in the bank` : "";
-    const balanceNote =
-      balance.shortTotal === 0
-        ? balance.banked > 0
-          ? `${plural(balance.banked, "extra shoot")} in the bank, beyond what the contract has called for so far.`
-          : null
-        : balance.missedTotal === 0
-          ? `${names(shortIdx)} ${shortIdx.length === 1 ? "was" : "were"} short by ${balance.shortTotal}. Extra shoots in ${names(coverIdx)} made that up${bankNote ? `, with ${bankNote}` : ""}.`
-          : balance.madeUpTotal > 0
-            ? `${names(shortIdx)} ${shortIdx.length === 1 ? "was" : "were"} short by ${balance.shortTotal}. Extra shoots in ${names(coverIdx)} made up ${balance.madeUpTotal}; ${balance.missedTotal} still owed.`
-            : `${names(shortIdx)} ${shortIdx.length === 1 ? "was" : "were"} short by ${balance.shortTotal}, not made up yet.`;
-
-    // Last / next shoot inside this contract, and what it takes to finish.
-    const flatShoots = timeline.flatMap((per) => per.shoots);
-    const lastShoot = flatShoots.length ? flatShoots[flatShoots.length - 1] : null;
-    const nextShoot = timeline.flatMap((per) => per.scheduled)[0] ?? null;
-    const currentPeriod = periods.find((per) => per.inProgress) ?? null;
-    const daysSinceLast = lastShoot ? Math.max(0, -(daysUntil(lastShoot.date.slice(0, 10)) ?? 0)) : null;
-    const remaining = pace && pace.total != null ? Math.max(0, pace.total - pace.done) : null;
-    const periodsLeft =
-      pace && pace.periodCount != null && pace.status !== "complete" && pace.inProgressQuota > 0
-        ? Math.max(1, pace.periodCount - pace.periodIndex + 1)
-        : null;
-    const unit = pace ? pace.unitLabel.toLowerCase() : "period";
-    const perPeriod = remaining != null && periodsLeft ? remaining / periodsLeft : null;
-    // Two lights: this period, then the full contract.
-    const monthHealth = pace && pace.status !== "complete" ? periodHealth(currentPeriod) : null;
-    const health = pace ? contractHealth(pace, { renewalOverdue: daysToRenewal != null && daysToRenewal < 0 }) : null;
-    // The contract line carries the make-up story when there is one; otherwise the running total.
-    const contractReason = !pace || !health
-      ? null
-      : (health.reason ??
-        balanceNote ??
-        `${pace.done}${pace.total != null ? ` of ${pace.total}` : ""} shoots done${
-          pace.expectedToDate > 0 ? `, ${pace.expectedToDate} were due by the end of ${lastClosed ? lastClosed.short : `last ${unit}`}` : ""
-        }.`);
-    const lights = [
-      monthHealth ? { scope: `This ${unit}`, ...monthHealth } : null,
-      health ? { scope: "Full contract", level: health.level, label: health.label, reason: contractReason ?? undefined } : null,
-    ].filter((x): x is { scope: string; level: "green" | "yellow" | "red"; label: string; reason: string | undefined } => !!x);
-
     return (
       <Tile label="Scope & contract health" icon={<BarChart3 className="h-3.5 w-3.5" />} spans={2}>
         <div className="flex flex-col gap-3">
+          {boardNote ? (
+            <div className={`text-[11px] ${boardNote.ok ? "text-emerald-700" : "text-amber-700"}`} role="status">
+              Saved. {boardNote.text}
+            </div>
+          ) : null}
+          {waiting ? (
+            <div className="flex flex-col gap-2 rounded-md border border-border bg-secondary/40 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4">
+              <div className="min-w-0 text-xs">
+                <div className="font-medium text-foreground">A new agreement is on file. The scope is drafted and waiting for you.</div>
+                <div className="text-muted-foreground">
+                  Read from &ldquo;{waiting.file}&rdquo;
+                  {waiting.uploaded_at ? `, uploaded ${fullDate(waiting.uploaded_at)}` : ""}. Nothing changes until you review it and save.
+                </div>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyAgreement(waiting)}
+                  disabled={pending}
+                  className="tap-target inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  Review draft
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissWaiting}
+                  disabled={pending}
+                  className="tap-target inline-flex items-center rounded-md border border-border bg-panel px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                >
+                  Not needed
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {services.map((s) => (
@@ -585,10 +971,28 @@ export function ScopeTile({
           </div>
 
           {empty ? (
-            <TileEmpty>
-              No scope set yet — click Edit to capture services, term, production,
-              deliverables and renewal dates.
-            </TileEmpty>
+            <div className="flex flex-col items-start gap-2">
+              <TileEmpty>
+                No scope set yet. Click Edit to capture services, term, production, deliverables and renewal dates, or
+                let the signed agreement fill it in for you to check.
+              </TileEmpty>
+              {waiting ? null : (
+                <button
+                  type="button"
+                  onClick={readAgreement}
+                  disabled={reading}
+                  className="tap-target inline-flex items-center gap-1.5 rounded-md border border-border bg-panel px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+                >
+                  <FileText className="h-3 w-3" />
+                  {reading ? "Reading the agreement, about a minute…" : "Draft from the agreement"}
+                </button>
+              )}
+              {readError ? (
+                <div className="text-[11px] text-amber-700" role="alert">
+                  {readError}
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               {scope.shoot_cadence && !(pace && pace.status !== "not_started") ? (
@@ -606,28 +1010,85 @@ export function ScopeTile({
                       <StatusRow key={l.scope} scope={l.scope} level={l.level} label={l.label} reason={l.reason} />
                     ))}
                   </div>
-                  {timeline.length ? <ContractCalendar periods={timeline} balance={balance} /> : null}
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                    <span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{pace.done}</span>
-                      {pace.total != null ? ` of ${pace.total}` : ""} shoots done
-                      {" · "}
-                      {pace.expectedToDate > 0 ? (
-                        <>
-                          <span className="font-medium tabular-nums text-foreground">{pace.expectedToDate}</span> due by the end of{" "}
-                          {lastClosed ? lastClosed.short : `last ${pace.unitLabel.toLowerCase()}`}
-                        </>
-                      ) : (
-                        <>nothing due until this {pace.unitLabel.toLowerCase()} ends</>
-                      )}
-                    </span>
-                    <span>
-                      {pace.unitLabel} {pace.periodIndex}
-                      {pace.periodCount ? ` of ${pace.periodCount}` : ""}
-                    </span>
-                  </div>
-                  {/* What's next */}
+                  {/* Where it stands, in a sentence, with real dates. */}
+                  <p className="text-[12px] leading-relaxed text-muted-foreground">
+                    {termLapsed ? (
+                      <>
+                        The agreement on file ended <span className="font-medium text-foreground">{fullDate(termView.end_date as string)}</span> and
+                        no renewal is on file.{" "}
+                        {afterTerm && afterTerm.shoots.length > 0 ? (
+                          <>
+                            <span className="font-medium text-foreground">
+                              {afterTerm.shoots.length} shoot{afterTerm.shoots.length === 1 ? " has" : "s have"}
+                            </span>{" "}
+                            happened since.{" "}
+                          </>
+                        ) : null}
+                        {records ? (
+                          <>
+                            For the part the Monday board covers (from {records.countedFrom}),{" "}
+                            <span className="font-medium text-foreground">
+                              {pace.done} of {pace.total}
+                            </span>{" "}
+                            shoots were done.
+                          </>
+                        ) : (
+                          <>
+                            While it ran,{" "}
+                            <span className="font-medium text-foreground">
+                              {pace.done}
+                              {pace.total != null ? ` of ${pace.total}` : ""}
+                            </span>{" "}
+                            shoots were done.
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-foreground">
+                          {pace.done}
+                          {pace.total != null ? ` of ${pace.total}` : ""} shoots done
+                        </span>
+                        {pace.total != null && termView.start_date && termView.end_date
+                          ? ` on this agreement, which runs ${fullDate(termView.start_date)} to ${fullDate(termView.end_date)}.`
+                          : termView.start_date
+                            ? ` since ${fullDate(termView.start_date)}.`
+                            : "."}{" "}
+                        {pace.expectedToDate > 0 && lastClosed
+                          ? `${pace.expectedToDate} ${pace.expectedToDate === 1 ? "was" : "were"} due by ${shortDate(lastClosed.end)}.`
+                          : currentPeriod
+                            ? `Nothing is due until ${shortDate(currentPeriod.end)}.`
+                            : ""}
+                        {records ? ` Counted from ${records.countedFrom}, where the Monday board's records begin.` : ""}
+                      </>
+                    )}
+                  </p>
+                  {timeline.length ? (
+                    scope.shoot_cadence && MONTHS_IN_PERIOD[scope.shoot_cadence] ? (
+                      <ShootTimeline
+                        periods={timeline}
+                        balance={balance}
+                        shoots={datedProjects.filter((p) => p.kind === "shoot")}
+                        monthsPer={MONTHS_IN_PERIOD[scope.shoot_cadence] as number}
+                        todayIso={todayIso}
+                        unit={pace.unitLabel.toLowerCase()}
+                        afterSince={afterTerm ? afterTerm.since : null}
+                      />
+                    ) : (
+                      <ContractCalendar periods={timeline} balance={balance} />
+                    )
+                  ) : null}
+                  {/* The few facts worth a glance */}
                   <dl className="flex flex-col gap-1 border-t border-border pt-2 text-[11px]">
+                    {perYear ? (
+                      <div className="flex items-baseline justify-between gap-3">
+                        <dt className="flex-shrink-0 text-muted-foreground">Shoots in {thisYear}</dt>
+                        <dd className="min-w-0 truncate text-right text-foreground">
+                          {yearDone}
+                          <span className="text-muted-foreground"> · the agreement adds up to {perYear} a year</span>
+                        </dd>
+                      </div>
+                    ) : null}
                     <div className="flex items-baseline justify-between gap-3">
                       <dt className="flex-shrink-0 text-muted-foreground">Last shoot</dt>
                       <dd className="min-w-0 truncate text-right text-foreground">
@@ -661,31 +1122,52 @@ export function ScopeTile({
                         )}
                       </dd>
                     </div>
-                    {remaining != null ? (
+                    {!termLapsed && remaining != null ? (
                       <div className="flex items-baseline justify-between gap-3">
-                        <dt className="flex-shrink-0 text-muted-foreground">To finish on time</dt>
+                        <dt className="flex-shrink-0 text-muted-foreground">Left on this agreement</dt>
                         <dd className="min-w-0 text-right text-foreground">
                           {remaining === 0 ? (
                             "All shoots done"
                           ) : (
                             <>
-                              {remaining} left
-                              {perPeriod != null ? (
-                                <span className="text-muted-foreground">
-                                  {" · "}
-                                  {Number.isInteger(perPeriod) ? perPeriod : `about ${perPeriod.toFixed(1)}`} a {unit} for{" "}
-                                  {periodsLeft} {unit}
-                                  {periodsLeft === 1 ? "" : "s"}
-                                </span>
-                              ) : null}
+                              {remaining}
+                              {termView.end_date ? <span className="text-muted-foreground"> · by {fullDate(termView.end_date)}</span> : null}
                             </>
                           )}
                         </dd>
                       </div>
                     ) : null}
                   </dl>
-                  {extras.length ? (
-                    <div className="text-[11px] text-muted-foreground">Also since the start: {extras.join(" · ")}</div>
+                  {/* The fine print, a tap away */}
+                  {records || afterTerm || extras.length ? (
+                    <details className="group/how text-[11px] text-muted-foreground">
+                      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 font-medium text-foreground/80 [&::-webkit-details-marker]:hidden">
+                        How this is counted
+                        <ChevronDown className="h-3 w-3 transition-transform group-open/how:rotate-180" />
+                      </summary>
+                      <div className="mt-1.5 flex flex-col gap-1.5">
+                        <div>
+                          Shoots are the dated projects on the Monday All Projects board. {pace.unitLabel} {pace.periodIndex}
+                          {pace.periodCount ? ` of ${pace.periodCount}` : ""} of the agreement.
+                        </div>
+                        {records ? (
+                          <div>
+                            The Monday board has no projects before {fullDate(records.from)}, so the {records.unrecorded} earlier{" "}
+                            {pace.unitLabel.toLowerCase()}
+                            {records.unrecorded === 1 ? " is" : "s are"} not judged either way.
+                          </div>
+                        ) : null}
+                        {afterTerm ? (
+                          <div>
+                            Since the agreement ended: {afterTerm.shoots.length} shoot{afterTerm.shoots.length === 1 ? "" : "s"}
+                            {afterTerm.micro ? `, ${afterTerm.micro} micro shoot${afterTerm.micro === 1 ? "" : "s"}` : ""}
+                            {afterTerm.edits ? `, ${afterTerm.edits} edit request${afterTerm.edits === 1 ? "" : "s"}` : ""}. These are shown but not
+                            counted against the ended agreement.
+                          </div>
+                        ) : null}
+                        {extras.length ? <div>Also during the agreement: {extras.join(" · ")}.</div> : null}
+                      </div>
+                    </details>
                   ) : null}
                   {periods.length ? (
                     <div className="flex flex-col gap-2">
@@ -694,7 +1176,9 @@ export function ScopeTile({
                         onClick={() => setShowLog((v) => !v)}
                         className="tap-target inline-flex w-fit items-center py-1 text-[12px] font-medium text-foreground underline underline-offset-2 md:py-0 md:text-[11px]"
                       >
-                        {showLog ? "Hide shoot log" : `View shoot log (${pace.done} shoot${pace.done === 1 ? "" : "s"})`}
+                        {showLog
+                          ? "Hide shoot log"
+                          : `View shoot log (${pace.done + (afterTerm?.shoots.length ?? 0)} shoot${pace.done + (afterTerm?.shoots.length ?? 0) === 1 ? "" : "s"})`}
                       </button>
                       {showLog ? (
                         <div className="divide-y divide-border rounded-md border border-border bg-panel">
@@ -702,7 +1186,9 @@ export function ScopeTile({
                             const short = per.shoots.length < per.owed;
                             const bal = balance.byIndex[per.index];
                             const covered = short && !per.inProgress && !!bal && bal.missed === 0;
-                            const tone = !short || covered
+                            const tone = per.noRecord
+                              ? "text-muted-foreground"
+                              : !short || covered
                               ? "text-emerald-700"
                               : per.inProgress
                                 ? "text-amber-700"
@@ -717,12 +1203,14 @@ export function ScopeTile({
                                     ) : null}
                                   </span>
                                   <span className={`font-medium tabular-nums ${tone}`}>
-                                    {per.shoots.length} / {per.owed}
-                                    {covered && bal ? <span className="font-normal"> · made up in {names(bal.coveredBy)}</span> : null}
+                                    {per.noRecord ? "no record" : `${per.shoots.length} / ${per.owed}`}
+                                    {covered && bal && !per.noRecord ? <span className="font-normal"> · made up in {names(bal.coveredBy)}</span> : null}
                                   </span>
                                 </div>
                                 {per.shoots.length === 0 ? (
-                                  <div className="text-[11px] italic text-muted-foreground">No shoots</div>
+                                  <div className="text-[11px] italic text-muted-foreground">
+                                    {per.noRecord ? "Before the Monday board's records begin" : "No shoots"}
+                                  </div>
                                 ) : null}
                                 {per.shoots.map((p, i) => (
                                   <LogLine key={`s${i}`} p={p} showClient={!!pool} />
@@ -739,23 +1227,54 @@ export function ScopeTile({
                               </div>
                             );
                           })}
+                          {afterTerm && afterTerm.shoots.length > 0 ? (
+                            <div className="flex flex-col gap-1 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2 text-[11px]">
+                                <span className="font-medium text-foreground">After the term on file ended</span>
+                                <span className="font-medium tabular-nums text-muted-foreground">{afterTerm.shoots.length}</span>
+                              </div>
+                              {afterTerm.shoots.map((p, i) => (
+                                <LogLine key={`a${i}`} p={p} showClient={!!pool} />
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
               ) : null}
-              {(scope.channels ?? []).map((ch) => {
-                const counts = mtdChannelCounts[ch.name] ?? { inFeed: 0, stories: 0 };
-                if (ch.inFeed == null && ch.stories == null) return null;
-                return (
-                  <div key={ch.name} className="flex flex-col gap-1">
-                    <div className="text-[11px] font-medium text-foreground">{ch.name}</div>
-                    {ch.inFeed != null ? <Meter label="In-Feed MTD" done={counts.inFeed} quota={ch.inFeed} /> : null}
-                    {ch.stories != null ? <Meter label="Stories MTD" done={counts.stories} quota={ch.stories} /> : null}
+              {/* Social, over the contract: this month and next live in the
+                  SocialDesk tile above, so this is the long view only. */}
+              {social ? (
+                <div className="flex flex-col gap-2 rounded-md border border-border bg-secondary/20 p-2.5">
+                  <div className="text-[11px] font-medium text-foreground">Social posts, contract to date</div>
+                  {!socialConnected ? (
+                    <div className="text-[11px] text-muted-foreground">SocialDesk could not be read just now.</div>
+                  ) : social.months === 0 ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      Counting starts once the first full month of the term has passed.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="-mt-1 text-[11px] text-muted-foreground">
+                        Posts approved from {social.fromLabel} through {social.throughLabel} ({social.months} full month
+                        {social.months === 1 ? "" : "s"}), against what the contract calls for over the same months.
+                      </div>
+                      {social.rows.map((r) => (
+                        <div key={r.channel} className="flex flex-col gap-1">
+                          <div className="text-[11px] font-medium text-foreground">{r.channel}</div>
+                          {r.inFeed ? <Meter label="In-feed" done={r.inFeed.done} quota={r.inFeed.owed} /> : null}
+                          {r.stories ? <Meter label="Stories" done={r.stories.done} quota={r.stories.owed} /> : null}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  <div className="border-t border-border pt-2 text-[11px] text-muted-foreground">
+                    Monthly social reporting: coming soon.
                   </div>
-                );
-              })}
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -856,6 +1375,54 @@ export function ScopeTile({
   return (
     <Tile label="Scope & contract health" icon={<BarChart3 className="h-3.5 w-3.5" />} spans={2}>
       <div className="flex flex-col gap-5">
+        {/* First pass from the signed agreement */}
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-secondary/20 p-2.5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
+            <div className="min-w-0 text-[11px] text-muted-foreground">
+              {fromAgreement ? (
+                <>
+                  Filled in from <span className="font-medium text-foreground">&ldquo;{fromAgreement.file}&rdquo;</span>
+                  {fromAgreement.uploaded_at ? `, uploaded ${fullDate(fromAgreement.uploaded_at)}` : ""}. Check it against the
+                  agreement, change anything that is off, then save. Nothing is saved until you do.
+                </>
+              ) : (
+                <>
+                  Signed agreement on this client&apos;s All Accounts row? It can fill this form in for you to check. Fees are
+                  never read in.
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={readAgreement}
+              disabled={reading || pending}
+              className="tap-target inline-flex flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-panel px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+            >
+              <FileText className="h-3 w-3" />
+              {reading ? "Reading, about a minute…" : fromAgreement ? "Read it again" : "Draft from the agreement"}
+            </button>
+          </div>
+          {readError ? (
+            <div className="text-[11px] text-amber-700" role="alert">
+              {readError}
+            </div>
+          ) : null}
+          {fromAgreement ? (
+            fromAgreement.check.length ? (
+              <div className="flex flex-col gap-1">
+                <div className="text-[11px] font-medium text-foreground">Check before saving</div>
+                <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground">
+                  {fromAgreement.check.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted-foreground">Nothing was flagged. Still worth a read-through before saving.</div>
+            )
+          ) : null}
+        </div>
+
         {/* Services */}
         <div className="flex flex-col gap-2">
           <SectionLabel>Services</SectionLabel>
@@ -883,6 +1450,10 @@ export function ScopeTile({
         {/* Term & dates */}
         <div className="flex flex-col gap-2">
           <SectionLabel>Term &amp; dates</SectionLabel>
+          <p className="-mt-1 text-[11px] text-muted-foreground">
+            These are copied to this client&apos;s row on the Monday All Accounts board when you save (Contract Start,
+            Contract Due, Retention Due 60 days before, and Auto Renew). Change them here, not on the board.
+          </p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="Start date">
               <input

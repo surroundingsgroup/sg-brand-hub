@@ -59,7 +59,7 @@ Schema (every top-level field required, but values may be null / [] when not pre
   "business_name": string | null,
   "tagline": string | null,
   "website": string | null,
-  "vertical": "marine" | "private_aviation" | "automotive" | "real_estate" | "real_estate_development" | "multifamily_residential" | "resort_travel" | "home_services" | "other" | null,
+  "vertical": "marine" | "real_estate" | "multifamily_residential" | "private_aviation" | "resort_travel" | "hospitality" | "automotive" | "luxury_goods" | "other" | null,
   "overview_client_raw": string | null,
   "look_and_feel": string | null,
   "audience_type": string | null,
@@ -77,7 +77,7 @@ Schema (every top-level field required, but values may be null / [] when not pre
 Field rules:
 - colors.hex MUST match #RRGGBB (6 hex digits, uppercase). Include only colors explicitly shown or convertible from an explicit CMYK/RGB callout. Skip generic black/white unless the guide names them. Empty array if none.
 - fonts.name is just the family ("Montserrat", not "Montserrat Bold 24pt"). role=primary for display/headlines, secondary for body, accent for occasional use. use_case is a short 2–6 word label ("Headlines", "Body copy", etc.) or "".
-- vertical: pick the single best match. multifamily_residential = apartment communities. real_estate_development = new-construction / developer brands. resort_travel = hotels, resorts, destinations. Null if unclear.
+- vertical: pick the single best match. marine = boats, yachts, marine products and services. real_estate = brokerages, builders, developers, architects, designers and home/outdoor-living brands. multifamily_residential = apartment communities. private_aviation = jets, charter, FBOs. resort_travel = hotels, resorts, destinations. hospitality = restaurants, venues, events and experiences. automotive = cars, dealers, motorsport. luxury_goods = watches, jewelry, fashion and other premium products. Null if unclear.
 - overview_client_raw: 2–4 sentences in the brand's own voice if an About / Who We Are section exists. Null otherwise (don't infer).
 - look_and_feel: 2–4 sentences describing the visual personality — pulled from an explicit mood / voice section, or from what you observe (palette, typography, imagery tone). Written like the brand describing itself.
 - social handles: @handle or URL as shown. Null if not present.`;
@@ -184,7 +184,8 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await client.messages.create({
       model: "claude-opus-5",
-      max_tokens: 4000,
+      // Room for the model's thinking as well as its answer (4,000 could cut the answer off).
+      max_tokens: 16000,
       system: SYSTEM,
       messages: [
         {
