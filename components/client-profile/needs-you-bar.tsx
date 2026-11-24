@@ -88,6 +88,12 @@ export function NeedsYouBar({
     const change = recentCreatorChange(b);
     if (!change || !shootAhead(b, today)) continue;
     const behind = inviteNeedsUpdate(b);
+    // Once the invite is updated the job is done: show the green "invite
+    // updated" for an hour as confirmation, then drop it.
+    if (b.has_invite && !behind && change.invite !== "failed") {
+      const sent = b.invite_sent_at ? Date.parse(b.invite_sent_at) : NaN;
+      if (!Number.isFinite(sent) || Date.now() - sent > 3600000) continue;
+    }
     const plural = change.to.includes(",") || change.from.includes(",");
     callouts.unshift({
       tone: behind || change.invite === "failed" ? "warn" : "ok",

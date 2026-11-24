@@ -56,6 +56,10 @@ type Analysis = {
   next_meeting_focus: string;
   /** Recent client emails the analyzer read alongside the notes. */
   sources?: { subject: string; date: string }[];
+  /** Client-side people on recent threads, offered as CC. */
+  cc_suggestions?: { email: string; name: string }[];
+  /** How many of the writer's past recaps shaped the email's style. */
+  styled_on?: number;
 };
 
 const EMPTY: Analysis = {
@@ -102,6 +106,7 @@ export function MeetingComposer({
   const [meetingDate, setMeetingDate] = useState<string>(today());
   const [rawNotes, setRawNotes] = useState("");
   const [editingEmail, setEditingEmail] = useState(false);
+  const [cc, setCc] = useState<string[]>([]);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const modeRef = useRef<"dictate" | "meeting" | null>(null);
 
@@ -498,7 +503,7 @@ Examples:
                 title="Follow-up email"
                 icon={<Mail className="h-3.5 w-3.5" />}
                 trailing={
-                  <OpenInGmail to={pocEmail} subject={analysis.followup_email_subject} body={analysis.followup_email_body} />
+                  <OpenInGmail to={pocEmail} cc={cc} subject={analysis.followup_email_subject} body={analysis.followup_email_body} />
                 }
                 onCopy={async () => {
                   const ok = await copyEmail(analysis.followup_email_body);
@@ -520,9 +525,39 @@ Examples:
                     }
                     className="h-8 text-[13px]"
                   />
+                  {analysis.cc_suggestions?.length ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="mr-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">CC</span>
+                      {analysis.cc_suggestions.map((p) => {
+                        const on = cc.includes(p.email);
+                        return (
+                          <button
+                            key={p.email}
+                            type="button"
+                            title={p.email}
+                            onClick={() => setCc((c) => (on ? c.filter((x) => x !== p.email) : [...c, p.email]))}
+                            className={`inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-[11px] transition-colors ${
+                              on
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-dashed border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground"
+                            }`}
+                          >
+                            {on ? <Check className="h-3 w-3" /> : <span className="text-[12px] leading-none">+</span>}
+                            {p.name}
+                          </button>
+                        );
+                      })}
+                      <span className="text-[10.5px] text-muted-foreground/70">on recent threads</span>
+                    </div>
+                  ) : null}
                   <div className="mt-2 flex items-baseline justify-between">
                     <label className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                       Body
+                      {analysis.styled_on ? (
+                        <span className="ml-2 normal-case tracking-normal text-muted-foreground/70">
+                          written in your style, from {analysis.styled_on} past recap{analysis.styled_on === 1 ? "" : "s"}
+                        </span>
+                      ) : null}
                     </label>
                     <button
                       type="button"
@@ -607,7 +642,7 @@ function AnalyzingState({ brandName, pocName }: { brandName: string; pocName: st
           );
         })}
       </ol>
-      <p className="mt-8 text-[11px] text-[#F7F4F0]/40">Usually under a minute.</p>
+      <p className="mt-8 text-[11px] text-[#F7F4F0]/40">Usually a minute or so.</p>
     </div>
   );
 }
@@ -809,7 +844,7 @@ function MetaChip({
   onChange: (v: string) => void;
 }) {
   const listId = useRef(`chip-${Math.random().toString(36).slice(2, 9)}`).current;
-  const width = `${Math.max(value ? Math.ceil(value.length * 0.9) : placeholder.length, 6) + 1}ch`;
+  const width = `${Math.max((value || placeholder).length, 6) + 1}ch`;
   return (
     <label
       className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 transition-colors focus-within:border-foreground/50 ${

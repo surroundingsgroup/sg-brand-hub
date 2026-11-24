@@ -66,18 +66,25 @@ export type MeetingAnalysis = {
 // Recent client email threads with their working links (Brief tool; empty
 // until the service account may read Gmail).
 type ClientEmail = { subject: string; date: string; from: string; snippet: string; links: { url: string; label: string }[] };
-async function clientEmails(brandName: string): Promise<ClientEmail[]> {
+type ClientContext = { emails: ClientEmail[]; people: { email: string; name: string }[]; style: string[] };
+async function clientContext(brandName: string, writer: string | null): Promise<ClientContext> {
+  const none: ClientContext = { emails: [], people: [], style: [] };
   const base = (process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com").replace(/\/$/, "");
   const token = process.env.HUB_BRIEF_API_TOKEN;
-  if (!token) return [];
+  if (!token) return none;
   try {
     const url = new URL("/api/hub/client-context", base);
     url.searchParams.set("brand_name", brandName);
-    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(20000) });
-    const body = (await res.json()) as { emails?: ClientEmail[] };
-    return Array.isArray(body.emails) ? body.emails.slice(0, 12) : [];
+    if (writer) url.searchParams.set("writer", writer);
+    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(25000) });
+    const body = (await res.json()) as { emails?: ClientEmail[]; people?: { email: string; name: string }[]; style_examples?: string[] };
+    return {
+      emails: Array.isArray(body.emails) ? body.emails.slice(0, 12) : [],
+      people: Array.isArray(body.people) ? body.people : [],
+      style: Array.isArray(body.style_examples) ? body.style_examples.slice(0, 2) : [],
+    };
   } catch {
-    return [];
+    return none;
   }
 }
 
@@ -120,10 +127,19 @@ export async function POST(
   // The client's briefs (so a revision request can point at the right one) and
   // what the team has been emailing them about (links to galleries, boards,
   // files), fetched side by side.
-  const [briefsRes, emails] = await Promise.all([
+  // Who is writing: the recap is in their voice, shaped like their past ones.
+  const { data: authData } = await supabase.auth.getUser();
+  const writerEmail = authData.user?.email?.toLowerCase() ?? null;
+  const { data: writerRow } = writerEmail
+    ? await supabase.from("team_profiles").select("name").eq("email", writerEmail).maybeSingle()
+    : { data: null };
+  const writerName = ((writerRow as { name?: string | null } | null)?.name ?? "").trim() || (brand.account_manager as string | null) || "the account manager";
+  const writerFirst = writerName.split(" ")[0];
+  const [briefsRes, ctx] = await Promise.all([
     fetchBriefsForClient(clientName).catch(() => ({ briefs: [] as Awaited<ReturnType<typeof fetchBriefsForClient>>["briefs"] })),
-    clientEmails(clientName),
+    clientContext(clientName, writerEmail),
   ]);
+  const emails = ctx.emails;
   const briefList = briefsRes.briefs
     .slice(0, 40)
     .map((b) => ({ id: b.id, project: b.project, type: b.project_type, date: b.date, url: b.revisions_url ?? `${b.url}?tab=revisions` }));
@@ -145,6 +161,7 @@ PUNCTUATION RULES (strict):
 Client: ${clientName}
 Point of contact: ${pocName}${pocEmail ? ` (${pocEmail})` : ""}
 Account Manager: ${amName}
+Writing the follow-up email: ${writerName} (the email is from them, in first person)
 Meeting type: ${meetingLabel}
 Meeting date: ${meetingDateLine(body.meeting_date)}
 
@@ -154,7 +171,11 @@ ${briefList.length ? briefList.map((b) => `${b.id} | ${b.project} | ${b.type ?? 
 Recent emails between us and the client, newest first (date | subject | from | links | what the latest message says):
 ${emails.length ? emails.map((e) => `${e.date.slice(0, 10)} | ${e.subject} | ${e.from} | ${e.links.map((l) => (l.label ? `${l.label}: ${l.url}` : l.url)).join(" ; ") || "no links"} | ${e.snippet}`).join("\n") : "(none available)"}
 
-Raw notes from the meeting:
+${ctx.style.length ? `How ${writerFirst} writes meeting recaps (real ones they sent; ** marks their bold). Match the greeting, opener, heading style, bullet voice, bolding, closing and sign-off. Use them ONLY for style, never for facts:
+${ctx.style.map((t, i) => `--- example ${i + 1} ---\n${t}`).join("\n")}
+--- end of examples ---
+
+` : ""}Raw notes from the meeting:
 """
 ${rawNotes}
 """
@@ -181,12 +202,18 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
   "followup_email_subject": "Ignored (the subject is set for you). Return an empty string.",
   "followup_email": {
     "first_name": "first name of ${pocName}",
-    "opener": "1 to 2 warm sentences: thanks, then what the meeting covered in plain words (e.g. 'Thanks for the time today. Good progress on the email series, the t-shirt shoot and planning for year end.')",
-    "decided": ["<topic>: one full sentence with the specifics (what exactly, numbers, names, dates, and why if it was said), 15 to 30 words"],
-    "on_our_side": ["<what SG will do>, with who on our side and when if said, 10 to 25 words"],
-    "from_you": ["<what the client will do>, with when and why it matters if said, 10 to 25 words"],
-    "coming_up": ["<date or timing>: <next meeting, deadline or milestone and what it is for>"],
-    "closing": "one warm closing sentence that points to the next step"
+    "opener": "1 to 2 warm, upbeat sentences in ${writerFirst}'s voice, e.g. 'Great catching up today! Below is a recap of our discussion and next steps.'",
+    "sections": [
+      {
+        "heading": "Title Case project or topic, 2 to 7 words, specific to this client (e.g. '34CC Content Review & Revisions', 'Palm Beach International Boat Show (PBIBS) Strategy', '2027 Renewal')",
+        "bullets": [
+          "one full sentence in first person: 'I'll' / 'We'll' for us, 'You'll' / 'You' for the client, with **double asterisks** around the 2 to 6 words that matter most (e.g. 'I'll make **revisions to a handful of images** based on your feedback.')",
+          { "label": "short bold label for a group, e.g. 'Pinned IG Post Series'", "sub": ["sub-point sentences, same voice and bolding"] }
+        ]
+      }
+    ],
+    "closing": "one warm line, e.g. 'Let me know if I missed anything or if there are any updates! Looking forward to making it all happen.'",
+    "sign_off": "e.g. 'Best Regards,' (the name and signature are added by their mail app, so no name)"
   },
   "next_meeting_focus": "One sentence: what the next sync should prioritize given what happened today."
 }
@@ -195,7 +222,9 @@ Rules:
 - Arrays are [] if nothing fits. Never invent action items.
 - Leave out "request", "meeting" and "brief_id" when they do not apply to an item's tool.
 - Use the emails as context. When an action item works from something already sent by email (a gallery the client picked favorites in, a board, a file, a folder), put that link in the item's "links" and say in request.context exactly what to pull from it (e.g. "Pull the hearted t-shirt images from the Pixieset gallery's t-shirt section"). Never attach an email link that is not about the item.
-- For a meeting item, do NOT invent times in the email; the times are added for you. Still list the meeting in coming_up as "<title>: <the window>".
+- The follow-up email is FROM ${writerName}. Write it in their voice, first person. Never mention ${writerFirst} in the third person ("Billy will"). Other teammates by first name ("Sam and I will").
+- Group the email by project or topic (2 to 5 sections, 2 to 5 bullets each). Inside each section say what we reviewed or decided, what we'll do, and what we need from them, with dates. Use a { label, sub } group only when a topic has several parts. Bold the key phrase in most bullets with **...**.
+- For the first meeting item with the client, write one bullet in its section containing exactly {{times}}, e.g. "Would {{times}} work for our 2027 renewal conversation?". Do NOT write times yourself; real open times replace {{times}}.
 - The follow-up email should feel complete to someone who was not in the room: specific, concrete, nothing vague like "next steps discussed". Use every concrete detail in the notes; never add facts that are not there.
 - action_items_us = things SG owes the client (shoots, edits, strategy, calendar, etc.)
 - action_items_them = things the client owes SG (approvals, assets, feedback, intros, etc.)
@@ -257,6 +286,8 @@ Rules:
   const usRaw = Array.isArray(p.action_items_us) ? (p.action_items_us as Record<string, unknown>[]) : [];
   const fe = (p.followup_email && typeof p.followup_email === "object" ? p.followup_email : null) as Record<string, unknown> | null;
   const slotsFor = new Map<number, { start: string; end: string; label: string }[]>();
+  let timesText: string | null = null;
+  let firstMeetingTitle: string | null = null;
   await Promise.all(
     usRaw.map(async (r, i) => {
       const m = r?.tool === "meeting" ? (r.meeting as Record<string, unknown> | undefined) : undefined;
@@ -264,26 +295,27 @@ Rules:
       const slots = await freeSlots(clientName, String(m.from), String(m.to), Number(m.minutes) || 60);
       if (!slots.length) return;
       slotsFor.set(i, slots);
-      if (fe && m.with_client !== false) {
-        const title = String(m.title || "Our next meeting");
-        // "Monday, Dec 7 at 10 AM; Tuesday, Dec 8 at 11 AM; or Wednesday, Dec 9 at 10 AM"
+      if (fe && m.with_client !== false && !timesText) {
+        // "**Monday, Dec 7 at 10 AM**, **Tuesday, Dec 8 at 11 AM** or **Wednesday, Dec 9 at 10 AM**"
         const list = slots.map((s) => {
           const d = new Date(s.start);
           const day = d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric" });
           const time = d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }).replace(":00", "");
-          return `${day} at ${time}`;
+          return `**${day} at ${time}**`;
         });
-        const joined = list.length > 1 ? `${list.slice(0, -1).join("; ")}; or ${list[list.length - 1]}` : list[0];
-        const offer = `${title}: would ${joined} work for you?`;
-        const coming = (Array.isArray(fe.coming_up) ? (fe.coming_up as unknown[]) : []).filter(
-          (x) => !(typeof x === "string" && x.toLowerCase().includes(title.toLowerCase().split(" ").slice(-2).join(" ")))
-        );
-        fe.coming_up = [...coming, offer];
+        timesText = list.length > 1 ? `${list.slice(0, -1).join(", ")} or ${list[list.length - 1]}` : list[0];
       }
     })
   );
 
-  const analysis = normalize(parsed, subject, amName === "the AM" ? "The Surroundings team" : amName.split(" ")[0]);
+  for (const r of usRaw) {
+    const m = r?.tool === "meeting" ? (r.meeting as Record<string, unknown> | undefined) : undefined;
+    if (m && m.with_client !== false) {
+      firstMeetingTitle = String(m.title || "our next meeting");
+      break;
+    }
+  }
+  const analysis = normalize(parsed, subject, { times: timesText, meetingTitle: firstMeetingTitle });
   // Tool details for the "us" items, in the order the model gave them.
   const briefTool = (process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com").replace(/\/$/, "");
   analysis.action_items_us = analysis.action_items_us.map((it, i) => {
@@ -321,7 +353,17 @@ Rules:
     return out;
   });
   // Which emails it read, so the page can say so.
-  return NextResponse.json({ ...analysis, sources: emails.slice(0, 8).map((e) => ({ subject: e.subject, date: e.date })) });
+  // CC suggestions: client-side people on recent threads, minus the contact.
+  const cc = ctx.people
+    .filter((pp) => pp.email && pp.email !== (pocEmail ?? "").toLowerCase())
+    .slice(0, 4)
+    .map((pp) => ({ email: pp.email, name: pp.name || pp.email.split("@")[0] }));
+  return NextResponse.json({
+    ...analysis,
+    sources: emails.slice(0, 8).map((e) => ({ subject: e.subject, date: e.date })),
+    cc_suggestions: cc,
+    styled_on: ctx.style.length,
+  });
 }
 
 // Strip em/en dashes server-side so the AI can never ship them even if
@@ -335,30 +377,49 @@ function scrubDashes(s: string): string {
     .replace(/[ \t]+\./g, ".");
 }
 
-// The follow-up email's layout is fixed here, not left to the model: a
-// greeting, one opener line, labeled sections of one-line bullets, a closing
-// line and the sign-off, with a blank line between every block.
-const EMAIL_SECTIONS: [string, string][] = [
-  ["decided", "DECIDED"],
-  ["on_our_side", "ON OUR SIDE"],
-  ["from_you", "FROM YOU"],
-  ["coming_up", "COMING UP"],
-];
+// The follow-up email as plain text the page can edit and render: greeting,
+// opener, then a Title Case heading per project with "• " bullets ("  ◦ "
+// sub-bullets, **bold** phrases), the closing and the sign-off. Real open
+// times replace {{times}}.
+type EmailExtras = { times: string | null; meetingTitle: string | null };
 
-function buildEmail(fe: Record<string, unknown>, signoff: string): string {
-  const line = (v: unknown) => (typeof v === "string" ? scrubDashes(v.trim()).replace(/^[•*-]\s*/, "").replace(/\s+/g, " ") : "");
-  const list = (v: unknown) => (Array.isArray(v) ? v.map(line).filter(Boolean).slice(0, 8) : []);
-  const blocks: string[] = [`Hi ${line(fe.first_name) || "there"},`, line(fe.opener) || "Thanks for the time today. Here is where we landed."];
-  for (const [key, label] of EMAIL_SECTIONS) {
-    const items = list(fe[key]);
-    if (items.length) blocks.push([label, ...items.map((i) => `• ${i}`)].join("\n"));
+function buildEmail(fe: Record<string, unknown>, extras: EmailExtras): string {
+  const line = (v: unknown) =>
+    typeof v === "string"
+      ? scrubDashes(v.trim()).replace(/^[•◦*-]\s+/, "").replace(/\s+/g, " ")
+      : "";
+  const fill = (t: string): string | null => {
+    if (!t.includes("{{times}}")) return t;
+    if (extras.times) return t.replace(/\{\{times\}\}/g, extras.times);
+    return `I'll send over a few times for ${extras.meetingTitle ? extras.meetingTitle.replace(/^(our|the)\s+/i, "our ") : "our next meeting"} shortly.`;
+  };
+  const blocks: string[] = [`Hi ${line(fe.first_name) || "there"},`, line(fe.opener) || "Great catching up today! Below is a recap of our discussion and next steps."];
+  const sections = Array.isArray(fe.sections) ? (fe.sections as unknown[]).slice(0, 6) : [];
+  for (const sec of sections) {
+    if (!sec || typeof sec !== "object") continue;
+    const o = sec as Record<string, unknown>;
+    const heading = line(o.heading).replace(/[.:]+$/, "");
+    const rows: string[] = [];
+    for (const b of Array.isArray(o.bullets) ? (o.bullets as unknown[]).slice(0, 8) : []) {
+      if (typeof b === "string") {
+        const t = fill(line(b));
+        if (t) rows.push(`• ${t}`);
+      } else if (b && typeof b === "object") {
+        const g = b as Record<string, unknown>;
+        const label = line(g.label).replace(/[:*]+$/, "").replace(/^\*+/, "");
+        const sub = (Array.isArray(g.sub) ? (g.sub as unknown[]) : []).map((x) => fill(line(x))).filter((x): x is string => !!x);
+        if (label) rows.push(`• **${label}:**`);
+        for (const x of sub) rows.push(`${label ? "  ◦ " : "• "}${x}`);
+      }
+    }
+    if (heading && rows.length) blocks.push([heading, ...rows].join("\n"));
   }
-  blocks.push(line(fe.closing) || "Talk soon.");
-  blocks.push(signoff);
+  blocks.push(line(fe.closing) || "Let me know if I missed anything or if there are any updates!");
+  blocks.push(line(fe.sign_off) || "Best Regards,");
   return blocks.join("\n\n");
 }
 
-function normalize(x: unknown, shortSubject: string, signoff: string): MeetingAnalysis {
+function normalize(x: unknown, shortSubject: string, extras: EmailExtras): MeetingAnalysis {
   const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
   const str = (v: unknown, fb = ""): string => {
     if (typeof v !== "string") return fb;
@@ -398,7 +459,7 @@ function normalize(x: unknown, shortSubject: string, signoff: string): MeetingAn
     followup_email_subject: shortSubject,
     followup_email_body:
       o.followup_email && typeof o.followup_email === "object"
-        ? buildEmail(o.followup_email as Record<string, unknown>, signoff)
+        ? buildEmail(o.followup_email as Record<string, unknown>, extras)
         : str(o.followup_email_body, ""),
     next_meeting_focus: str(o.next_meeting_focus, ""),
   };

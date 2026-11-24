@@ -7,15 +7,16 @@
 
 import { Mail } from "lucide-react";
 import { toast } from "sonner";
-import { copyEmail } from "./email-preview";
+import { copyEmail, emailPlain } from "./email-preview";
 
-export function OpenInGmail({ to, subject, body }: { to: string | null; subject: string; body: string }) {
+export function OpenInGmail({ to, cc = [], subject, body }: { to: string | null; cc?: string[]; subject: string; body: string }) {
   async function open() {
     const copied = await copyEmail(body);
     const params = new URLSearchParams({ view: "cm", fs: "1", su: subject });
     if (to) params.set("to", to);
+    if (cc.length) params.set("cc", cc.join(","));
     // If the copy failed, put the plain text in so nothing is lost.
-    if (!copied) params.set("body", body);
+    if (!copied) params.set("body", emailPlain(body));
     window.open(`https://mail.google.com/mail/?${params.toString()}`, "_blank", "noopener");
     if (copied) toast.success("Gmail is opening. The formatted email is copied: click in the body and press ⌘V.");
   }
