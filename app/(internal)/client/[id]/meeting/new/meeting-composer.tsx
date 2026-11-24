@@ -31,6 +31,7 @@ import { useDictation } from "@/components/dictation/use-dictation";
 import { DictationPill } from "@/components/dictation/dictation-pill";
 import { SummaryList } from "@/components/meetings/summary-list";
 import { EmailPreview, copyEmail } from "@/components/meetings/email-preview";
+import { OpenInGmail } from "@/components/meetings/open-in-gmail";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -240,9 +241,6 @@ export function MeetingComposer({
     }
   }
 
-  const followupMailto = pocEmail
-    ? `mailto:${pocEmail}?subject=${encodeURIComponent(analysis.followup_email_subject)}&body=${encodeURIComponent(analysis.followup_email_body)}`
-    : null;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8">
@@ -432,15 +430,7 @@ Examples:
                 title="Follow-up email"
                 icon={<Mail className="h-3.5 w-3.5" />}
                 trailing={
-                  followupMailto ? (
-                    <a
-                      href={followupMailto}
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <Mail className="h-3 w-3" />
-                      Open in mail
-                    </a>
-                  ) : null
+                  <OpenInGmail to={pocEmail} subject={analysis.followup_email_subject} body={analysis.followup_email_body} />
                 }
                 onCopy={async () => {
                   const ok = await copyEmail(analysis.followup_email_body);

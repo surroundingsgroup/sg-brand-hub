@@ -123,18 +123,19 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
   "followup_email_subject": "Ignored (the subject is set for you). Return an empty string.",
   "followup_email": {
     "first_name": "first name of ${pocName}",
-    "opener": "one short warm line, e.g. 'Thanks for the time today. Here is where we landed.'",
-    "decided": ["<topic>: <what was decided>, 12 words or fewer"],
-    "on_our_side": ["<what SG will do>, <when if said>, 12 words or fewer"],
-    "from_you": ["<what the client will do>, <when if said>, 12 words or fewer"],
-    "coming_up": ["<date or timing>: <next meeting, deadline or milestone>"],
-    "closing": "one short closing line"
+    "opener": "1 to 2 warm sentences: thanks, then what the meeting covered in plain words (e.g. 'Thanks for the time today. Good progress on the email series, the t-shirt shoot and planning for year end.')",
+    "decided": ["<topic>: one full sentence with the specifics (what exactly, numbers, names, dates, and why if it was said), 15 to 30 words"],
+    "on_our_side": ["<what SG will do>, with who on our side and when if said, 10 to 25 words"],
+    "from_you": ["<what the client will do>, with when and why it matters if said, 10 to 25 words"],
+    "coming_up": ["<date or timing>: <next meeting, deadline or milestone and what it is for>"],
+    "closing": "one warm closing sentence that points to the next step"
   },
   "next_meeting_focus": "One sentence: what the next sync should prioritize given what happened today."
 }
 
 Rules:
 - Arrays are [] if nothing fits. Never invent action items.
+- The follow-up email should feel complete to someone who was not in the room: specific, concrete, nothing vague like "next steps discussed". Use every concrete detail in the notes; never add facts that are not there.
 - action_items_us = things SG owes the client (shoots, edits, strategy, calendar, etc.)
 - action_items_them = things the client owes SG (approvals, assets, feedback, intros, etc.)
 - If the raw notes are thin or unclear, say so in the summary rather than padding.

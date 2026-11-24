@@ -5,6 +5,7 @@
 import { notFound } from "next/navigation";
 import { SummaryList } from "@/components/meetings/summary-list";
 import { EmailPreview } from "@/components/meetings/email-preview";
+import { OpenInGmail } from "@/components/meetings/open-in-gmail";
 import Link from "next/link";
 import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -78,10 +79,6 @@ export default async function SavedMeetingPage({
     m.meeting_title ?? MEETING_LABEL[m.meeting_type] ?? MEETING_LABEL.other;
 
   const pocEmail = brand.submitter_email as string | null;
-  const followupMailto =
-    pocEmail && m.followup_email_subject && m.followup_email_body
-      ? `mailto:${pocEmail}?subject=${encodeURIComponent(m.followup_email_subject)}&body=${encodeURIComponent(m.followup_email_body)}`
-      : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -158,14 +155,8 @@ export default async function SavedMeetingPage({
                 title="Follow-up email"
                 icon={<Mail className="h-3.5 w-3.5" />}
                 trailing={
-                  followupMailto ? (
-                    <a
-                      href={followupMailto}
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <Mail className="h-3 w-3" />
-                      Open in mail
-                    </a>
+                  m.followup_email_body ? (
+                    <OpenInGmail to={pocEmail} subject={m.followup_email_subject ?? ""} body={m.followup_email_body} />
                   ) : null
                 }
               >
