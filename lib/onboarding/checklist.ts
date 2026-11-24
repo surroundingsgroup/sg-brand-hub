@@ -1,9 +1,9 @@
 // The new-client onboarding checklist on the Surroundings client page: has
-// everything a client needs been set up? Most items are read from where the
+// everything a client needs been set up? Every item is read from where the
 // work actually lives (the brand record, logos, Dropbox, the Monday client
-// board and All Accounts row, SocialDesk); the few nothing records (Meta
-// partnership) are ticked by hand and saved as "onboarding_check" rows in
-// brand_activity_log, newest wins.
+// board and All Accounts row, SocialDesk, including whether the client's
+// Facebook / Instagram are connected there). Hand-ticked items, if any are
+// ever added, are saved as "onboarding_check" rows in brand_activity_log.
 
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Brand } from "@/types/brand";
@@ -66,6 +66,8 @@ export async function loadOnboardingChecklist(opts: {
   clientBoardId: string | null;
   socialdeskUrl: string | null;
   scopeChannels: number;
+  /** SocialDesk's connected accounts for this client (from the pulse feed). */
+  connections: { platform: string; ok: boolean }[];
 }): Promise<OnboardingChecklist> {
   const { supabase, brand: b } = opts;
   const brandPage = `/brand/${b.id}?from=client`;
@@ -156,21 +158,36 @@ export async function loadOnboardingChecklist(opts: {
       hrefLabel: "Request",
       hint: "From the brand profile, once it is approved",
     },
-    ...(social
-      ? [
-          {
-            key: "meta_partnership",
-            label: "Meta partnership accepted",
-            done: manual("meta_partnership"),
-            manual: true,
-            hint: "Client shares partner access to SG's Meta Business Portfolio (3480546738856390)",
-          },
-        ]
-      : []),
+    ...(social ? [metaItem(opts.connections, opts.socialdeskUrl)] : []),
   ];
+  void manual; // hand-ticked items read through this when there are any
   // Video assets: the link only helps while it is still to do.
   for (const it of items) if (it.key === "video_assets" && it.done) it.href = undefined;
 
   const done = items.filter((i) => i.done).length;
   return { items, done, total: items.length, social };
+}
+
+// Meta is set up when the client's Facebook / Instagram are connected in
+// SocialDesk (that only works once the client has granted access), and still
+// healthy when the connection's token is live.
+function metaItem(connections: { platform: string; ok: boolean }[], socialdeskUrl: string | null): OnboardingItem {
+  const meta = connections.filter((c) => /facebook|instagram/i.test(c.platform));
+  const live = meta.filter((c) => c.ok).map((c) => c.platform);
+  const expired = meta.filter((c) => !c.ok).map((c) => c.platform);
+  const done = live.length > 0;
+  return {
+    key: "meta",
+    label: "Meta connected in SocialDesk",
+    done,
+    href: socialdeskUrl ?? undefined,
+    hrefLabel: done ? live.join(" · ") : "Connect",
+    hint: done
+      ? expired.length
+        ? `${expired.join(" and ")} needs reconnecting`
+        : undefined
+      : expired.length
+        ? `${expired.join(" and ")} connected but the access expired: reconnect in SocialDesk`
+        : "Client shares access with SG's Meta Business Portfolio (3480546738856390), then connect their pages in SocialDesk",
+  };
 }

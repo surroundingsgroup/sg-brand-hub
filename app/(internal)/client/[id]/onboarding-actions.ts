@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isEmailAllowed } from "@/lib/auth/domain";
 
-const MANUAL_ITEMS = new Set(["meta_partnership"]);
+// None at the moment: Meta is read from SocialDesk's connected accounts.
+const MANUAL_ITEMS = new Set<string>([]);
 
 export async function setOnboardingCheck(brandId: string, item: string, done: boolean): Promise<{ ok: boolean; error?: string }> {
   const supabase = createSupabaseServerClient();

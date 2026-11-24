@@ -218,6 +218,7 @@ export default async function ClientProfilePage({
       ? String(clientBoardData.boardId)
       : ((b as unknown as { monday_board_id?: string | null }).monday_board_id ?? null),
     socialdeskUrl,
+    connections: pulseData.connections,
     scopeChannels: (() => {
       const ch = (scope as unknown as { channels?: unknown } | null)?.channels;
       return Array.isArray(ch) ? ch.length : ch && typeof ch === "object" ? Object.keys(ch).length : 0;

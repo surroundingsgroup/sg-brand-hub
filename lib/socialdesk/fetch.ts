@@ -108,6 +108,8 @@ export type ContentPulse = {
   found: boolean;
   client_id: string | null;
   client_name: string | null;
+  /** Social accounts connected for publishing, and whether each token is live (added 2026-11-24). */
+  connections: { platform: string; ok: boolean }[];
   last_post: PulseEvent | null;
   next_scheduled: PulseEvent | null;
   last_by_channel: ChannelLast[];
@@ -160,6 +162,7 @@ const EMPTY: ContentPulse = {
   found: false,
   client_id: null,
   client_name: null,
+  connections: [],
   last_post: null,
   next_scheduled: null,
   last_by_channel: [],
@@ -207,6 +210,7 @@ export async function fetchContentPulse(
       found: !!body.found,
       client_id: body.client_id ?? null,
       client_name: body.client_name ?? null,
+      connections: Array.isArray(body.connections) ? body.connections : [],
       last_post: body.last_post ?? null,
       next_scheduled: body.next_scheduled ?? null,
       last_by_channel: Array.isArray(body.last_by_channel) ? body.last_by_channel : [],
