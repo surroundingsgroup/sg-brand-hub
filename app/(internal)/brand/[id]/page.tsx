@@ -135,11 +135,15 @@ export default async function BrandDetailPage({
         </div>
       </div>
 
-      {/* Approval checklist — hidden once brand is approved. */}
-      {b.status !== "approved" && (
+      {/* Brand kit checklist: shown until the brand kit is complete. A Won
+          deal approves the client right away, so approved brands still see
+          it while anything the brand kit or video assets need is missing. */}
+      {(b.status !== "approved" ||
+        [...checklist.required, ...checklist.videoAssets].some((i) => !i.done)) && (
         <div className="mb-8">
           <ApprovalChecklist
             required={checklist.required}
+            videoAssets={checklist.videoAssets}
             recommended={checklist.recommended}
             allRequiredDone={ready}
           />

@@ -6,7 +6,8 @@
 // ever added, are saved as "onboarding_check" rows in brand_activity_log.
 
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Brand } from "@/types/brand";
+import type { Brand, BrandLogo } from "@/types/brand";
+import { brandKitStatus } from "@/lib/brands/approval-readiness";
 
 const MONDAY_API_URL = "https://api.monday.com/v2";
 const SLUG = "nauticalnetwork";
@@ -63,6 +64,8 @@ export async function loadOnboardingChecklist(opts: {
   supabase: ReturnType<typeof createSupabaseServerClient>;
   brand: Brand;
   imageLogoCount: number;
+  /** The brand's logos (file name + type is enough) for the brand kit check. */
+  logos: Pick<BrandLogo, "file_name" | "logo_type">[];
   clientBoardId: string | null;
   socialdeskUrl: string | null;
   scopeChannels: number;
@@ -89,8 +92,10 @@ export async function loadOnboardingChecklist(opts: {
   };
 
   const social = Boolean(opts.socialdeskUrl) || opts.scopeChannels > 0 || /social/i.test(row?.services ?? "");
-  const hasOverview = Boolean((b.overview_polished ?? "").trim() || (b.overview_client_raw ?? "").trim());
-  const hasPrimaryColor = (b.colors ?? []).some((c) => c.role === "primary");
+  // Brand kit = the brand profile's own checklist: required to approve plus
+  // what the video team needs for end cards and lower thirds.
+  const kit = brandKitStatus(b, opts.logos as BrandLogo[]);
+  const kitDone = kit.done === kit.total;
 
   const items: OnboardingItem[] = [
     {
@@ -117,11 +122,13 @@ export async function loadOnboardingChecklist(opts: {
     },
     {
       key: "branding",
-      label: "Branding filled in",
-      done: hasOverview && hasPrimaryColor,
+      label: kitDone ? "Brand kit complete" : `Brand kit ${kit.done} of ${kit.total}`,
+      done: kitDone,
       href: brandPage,
-      hrefLabel: hasOverview && hasPrimaryColor ? "Brand profile" : "Fill it in",
-      hint: hasOverview && hasPrimaryColor ? undefined : [!hasOverview && "overview", !hasPrimaryColor && "primary color"].filter(Boolean).join(" and ") + " missing",
+      hrefLabel: kitDone ? "Brand profile" : "Finish it",
+      hint: kitDone
+        ? undefined
+        : `Missing: ${kit.missing.slice(0, 3).join(", ").toLowerCase()}${kit.missing.length > 3 ? ` and ${kit.missing.length - 3} more` : ""}`,
     },
     {
       key: "logos",

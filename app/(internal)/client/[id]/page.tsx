@@ -65,7 +65,7 @@ export default async function ClientProfilePage({
     supabase.from("brands").select("*").eq("id", params.id).single(),
     supabase
       .from("brand_logos")
-      .select("id, logo_type")
+      .select("id, logo_type, file_name")
       .eq("brand_id", params.id),
   ]);
 
@@ -214,6 +214,7 @@ export default async function ClientProfilePage({
     supabase,
     brand: b,
     imageLogoCount: ((logos ?? []) as { logo_type?: string | null }[]).filter((l) => l.logo_type !== "reference").length,
+    logos: (logos ?? []) as { file_name: string; logo_type: string | null }[],
     clientBoardId: clientBoardData.boardId
       ? String(clientBoardData.boardId)
       : ((b as unknown as { monday_board_id?: string | null }).monday_board_id ?? null),
