@@ -50,3 +50,29 @@ export async function fetchClientMeetings(brandName: string, opts: { fresh?: boo
     return { ...EMPTY, error: (e as Error).message };
   }
 }
+
+// ── Lifecycle meetings (onboarding checklist) ─────────────────────────────────
+// The Brief Tool sorts the client's meetings (about a year ahead) by title into
+// kickoff / monthly sync / strategy collab / quarterly review / annual audit.
+
+export type LifecycleKey = "kickoff" | "monthly_sync" | "strategy_collab" | "quarterly_review" | "annual_audit";
+export type LifecycleMeeting = { title: string; start: string; upcoming: boolean };
+/** null = the calendar could not be read (so nothing can be said either way). */
+export type ClientLifecycle = Partial<Record<LifecycleKey, LifecycleMeeting>> | null;
+
+export async function fetchClientLifecycle(brandName: string): Promise<ClientLifecycle> {
+  const base = (process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com").replace(/\/$/, "");
+  const token = process.env.HUB_BRIEF_API_TOKEN;
+  if (!token) return null;
+  const url = new URL("/api/client-meetings", base);
+  url.searchParams.set("brand_name", brandName);
+  url.searchParams.set("lifecycle", "1");
+  try {
+    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, next: { revalidate: 300 } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { ok?: boolean; lifecycle?: Partial<Record<LifecycleKey, LifecycleMeeting>> };
+    return body.ok ? body.lifecycle ?? {} : null;
+  } catch {
+    return null;
+  }
+}

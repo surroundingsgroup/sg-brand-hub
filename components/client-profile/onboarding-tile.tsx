@@ -13,7 +13,17 @@ import { setOnboardingCheck } from "@/app/(internal)/client/[id]/onboarding-acti
 import type { OnboardingChecklist } from "@/lib/onboarding/checklist";
 import { cn } from "@/lib/utils";
 
-export function OnboardingTile({ brandId, checklist }: { brandId: string; checklist: OnboardingChecklist }) {
+export function OnboardingTile({
+  brandId,
+  checklist,
+  collapsed = false,
+}: {
+  brandId: string;
+  checklist: OnboardingChecklist;
+  /** Start folded (older clients: there to check, not in the way). */
+  collapsed?: boolean;
+}) {
+  const [open, setOpen] = useState(!collapsed);
   const [local, setLocal] = useState<Record<string, boolean>>({});
   const [pending, start] = useTransition();
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -43,6 +53,16 @@ export function OnboardingTile({ brandId, checklist }: { brandId: string; checkl
           style={{ width: `${pct}%` }}
         />
       </div>
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="mb-2 self-start text-[12px] font-medium text-foreground/70 hover:text-foreground"
+        >
+          {open ? "Hide checklist" : "Show checklist"}
+        </button>
+      ) : null}
+      {open ? (
       <ul className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
         {items.map((i) => {
           const external = i.href ? /^https?:\/\//.test(i.href) : false;
@@ -93,6 +113,16 @@ export function OnboardingTile({ brandId, checklist }: { brandId: string; checkl
                   <span className={cn("text-[13px] font-medium", i.done ? "text-foreground/60" : "text-foreground")}>{i.label}</span>
                   {link}
                 </div>
+                {i.parts?.length ? (
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                    {i.parts.map((p) => (
+                      <span key={p.label} className={cn("inline-flex items-center gap-1 text-[11.5px]", p.done ? "text-foreground/60" : "text-muted-foreground")}>
+                        {p.done ? <Check className="h-3 w-3 text-emerald-600" /> : <span className="h-2.5 w-2.5 rounded-full border border-dashed border-amber-500/70" />}
+                        {p.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 {i.hint && !i.done ? <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">{i.hint}</div> : null}
                 {i.hint && i.done && i.key === "am" ? <div className="mt-0.5 text-[11.5px] text-muted-foreground">{i.hint}</div> : null}
               </div>
@@ -100,6 +130,7 @@ export function OnboardingTile({ brandId, checklist }: { brandId: string; checkl
           );
         })}
       </ul>
+      ) : null}
     </Tile>
   );
 }

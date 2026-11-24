@@ -21,6 +21,7 @@ import { DeleteBrandButton } from "@/components/brand/delete-brand-button";
 import { RequestVideoAssetsButton } from "@/components/brand/request-video-assets-button";
 import { MergeDuplicateBanner } from "@/components/brand/merge-duplicate-banner";
 import { findDuplicateBrands } from "@/lib/brands/duplicates";
+import { typesFor } from "@/lib/brands/vertical-types";
 import { updateBrand, deleteLogo, reorderLogos } from "./actions";
 import { VERTICAL_LABELS, SELECTABLE_VERTICALS, ENGAGEMENT_LABELS, type Brand, type BrandLogo, type BrandActivityLog } from "@/types/brand";
 import { formatRelativeDate } from "@/lib/utils";
@@ -180,6 +181,15 @@ export default async function BrandDetailPage({
                 {b.vertical === "other" && (
                   <EditableField label="Vertical (other)" field="vertical_other" initialValue={b.vertical_other ?? ""} brandId={b.id} onSave={updateBrand} />
                 )}
+                <EditableSelect
+                  key={`vertical-type-${b.vertical ?? "none"}`}
+                  label="Vertical type"
+                  field="vertical_type"
+                  initialValue={b.vertical_type ?? null}
+                  brandId={b.id}
+                  options={[...new Set([...typesFor(b.vertical), ...(b.vertical_type ? [b.vertical_type] : [])])].map((t) => ({ value: t, label: t }))}
+                  onSave={updateBrand}
+                />
                 <EditableField label="Account manager (SG)" field="account_manager" initialValue={b.account_manager ?? ""} brandId={b.id} onSave={updateBrand} placeholder="e.g. Billy Pavlock" />
                 <EditableSelect
                   label="Engagement type"

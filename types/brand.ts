@@ -116,6 +116,8 @@ export type Brand = {
   website: string | null;
   vertical: BrandVertical | null;
   vertical_other: string | null;
+  /** Type of business within the vertical (lib/brands/vertical-types.ts). Column added 2026-11-24. */
+  vertical_type?: string | null;
   tagline: string | null;
 
   submitter_name: string | null;

@@ -8,6 +8,7 @@
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Brand, BrandLogo } from "@/types/brand";
 import { brandKitStatus } from "@/lib/brands/approval-readiness";
+import type { ClientLifecycle, LifecycleKey } from "@/lib/meetings/calendar";
 
 const MONDAY_API_URL = "https://api.monday.com/v2";
 const SLUG = "nauticalnetwork";
@@ -23,6 +24,8 @@ export type OnboardingItem = {
   hint?: string;
   /** Ticked by hand on the page (nothing else records it). */
   manual?: boolean;
+  /** Sub-parts shown as small checks under the label (lifecycle meetings). */
+  parts?: { label: string; done: boolean }[];
 };
 
 export type OnboardingChecklist = { items: OnboardingItem[]; done: number; total: number; social: boolean };
@@ -71,6 +74,8 @@ export async function loadOnboardingChecklist(opts: {
   scopeChannels: number;
   /** SocialDesk's connected accounts for this client (from the pulse feed). */
   connections: { platform: string; ok: boolean }[];
+  /** The client's lifecycle meetings from the calendar (null = not readable). */
+  lifecycle: ClientLifecycle;
 }): Promise<OnboardingChecklist> {
   const { supabase, brand: b } = opts;
   const brandPage = `/brand/${b.id}?from=client`;
@@ -166,6 +171,7 @@ export async function loadOnboardingChecklist(opts: {
       hint: "From the brand profile, once it is approved",
     },
     ...(social ? [metaItem(opts.connections, opts.socialdeskUrl)] : []),
+    ...meetingItems(b, opts.lifecycle),
   ];
   void manual; // hand-ticked items read through this when there are any
   // Video assets: the link only helps while it is still to do.
@@ -197,4 +203,54 @@ function metaItem(connections: { platform: string; ok: boolean }[], socialdeskUr
         ? `${expired.join(" and ")} connected but the access expired: reconnect in SocialDesk`
         : "Client shares access with SG's Meta Business Portfolio (3480546738856390), then connect their pages in SocialDesk",
   };
+}
+
+// Kickoff and the lifecycle meetings, read from the AM's and Billy's calendars
+// by title. A missing one links to a new Google Calendar event already titled
+// so it is recognized once saved (client contact added for client meetings).
+const LIFECYCLE: { key: LifecycleKey; label: string; title: string; withClient: boolean }[] = [
+  { key: "monthly_sync", label: "Monthly sync", title: "Monthly Sync", withClient: true },
+  { key: "strategy_collab", label: "Internal strategy collab", title: "Internal Strategy Collab", withClient: false },
+  { key: "quarterly_review", label: "Quarterly business review", title: "Quarterly Business Review", withClient: true },
+  { key: "annual_audit", label: "Annual audit", title: "Annual Audit", withClient: true },
+];
+
+function newEventLink(b: Brand, title: string, withClient: boolean): string {
+  const params = new URLSearchParams({ text: `${b.business_name} | ${title}` });
+  const guest = withClient ? ((b as Brand & { poc_email?: string | null }).poc_email ?? b.submitter_email ?? "").trim() : "";
+  if (guest) params.set("add", guest);
+  return `https://calendar.google.com/calendar/r/eventedit?${params.toString()}`;
+}
+
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+
+function meetingItems(b: Brand, lc: ClientLifecycle): OnboardingItem[] {
+  const unreadable = lc === null;
+  const kickoff = lc?.kickoff;
+  const parts = LIFECYCLE.map((m) => ({ label: m.label, done: Boolean(lc?.[m.key]) }));
+  const firstMissing = LIFECYCLE.find((m) => !lc?.[m.key]);
+  const allSet = !unreadable && !firstMissing;
+  return [
+    {
+      key: "kickoff",
+      label: "Kickoff meeting scheduled",
+      done: Boolean(kickoff),
+      href: kickoff ? undefined : newEventLink(b, "Kickoff", true),
+      hrefLabel: kickoff ? `${kickoff.upcoming ? "" : "Held "}${shortDay(kickoff.start)}` : "Schedule",
+      hint: kickoff
+        ? undefined
+        : unreadable
+          ? "Couldn't read the calendar just now"
+          : "Put a meeting with \"Kickoff\" in the title on the AM's calendar",
+    },
+    {
+      key: "lifecycle_meetings",
+      label: "Lifecycle meetings on the calendar",
+      done: allSet,
+      parts,
+      href: firstMissing ? newEventLink(b, firstMissing.title, firstMissing.withClient) : undefined,
+      hrefLabel: firstMissing ? `Schedule ${firstMissing.label.toLowerCase()}` : undefined,
+      hint: unreadable ? "Couldn't read the calendar just now" : undefined,
+    },
+  ];
 }

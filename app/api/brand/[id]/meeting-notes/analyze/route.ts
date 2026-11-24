@@ -121,7 +121,15 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
     { "task": "what the client needs to do", "owner": "person at the client if named, else null", "due": "date if mentioned, else null" }
   ],
   "followup_email_subject": "Ignored (the subject is set for you). Return an empty string.",
-  "followup_email_body": "A client-ready follow-up email that reads in 20 seconds. Plain text, no markdown, no bold, no em dashes. Exactly this layout, leaving out any section with nothing in it:\nHi <first name of ${pocName}>,\n\nThanks for the time today. Here is where we landed.\n\nDECIDED\n• <topic>: <decision, 15 words or fewer>\n\nWE ARE ON\n• <what SG will do> (<when, if said>)\n\nFROM YOU\n• <what the client will do> (<when, if said>)\n\nCOMING UP\n• <next meeting, deadline or milestone, with its date>\n\n<one short closing line>\n<first name of ${amName}>\n\nBullets use the • character. Each bullet is one line. No paragraphs anywhere except the one-line thank-you and the one-line close.",
+  "followup_email": {
+    "first_name": "first name of ${pocName}",
+    "opener": "one short warm line, e.g. 'Thanks for the time today. Here is where we landed.'",
+    "decided": ["<topic>: <what was decided>, 12 words or fewer"],
+    "on_our_side": ["<what SG will do>, <when if said>, 12 words or fewer"],
+    "from_you": ["<what the client will do>, <when if said>, 12 words or fewer"],
+    "coming_up": ["<date or timing>: <next meeting, deadline or milestone>"],
+    "closing": "one short closing line"
+  },
   "next_meeting_focus": "One sentence: what the next sync should prioritize given what happened today."
 }
 
@@ -182,7 +190,7 @@ Rules:
     : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
   const subject = `${clientName} | ${SHORT_LABEL[meetingType] ?? "Meeting"} recap, ${day}`;
   void meetingTitle;
-  const analysis = normalize(parsed, subject);
+  const analysis = normalize(parsed, subject, amName === "the AM" ? "The Surroundings team" : amName.split(" ")[0]);
   return NextResponse.json(analysis);
 }
 
@@ -193,11 +201,34 @@ function scrubDashes(s: string): string {
   return s
     .replace(/\s*—\s*/g, ". ")
     .replace(/–/g, "-")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+\./g, ".");
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\./g, ".");
 }
 
-function normalize(x: unknown, shortSubject: string): MeetingAnalysis {
+// The follow-up email's layout is fixed here, not left to the model: a
+// greeting, one opener line, labeled sections of one-line bullets, a closing
+// line and the sign-off, with a blank line between every block.
+const EMAIL_SECTIONS: [string, string][] = [
+  ["decided", "DECIDED"],
+  ["on_our_side", "ON OUR SIDE"],
+  ["from_you", "FROM YOU"],
+  ["coming_up", "COMING UP"],
+];
+
+function buildEmail(fe: Record<string, unknown>, signoff: string): string {
+  const line = (v: unknown) => (typeof v === "string" ? scrubDashes(v.trim()).replace(/^[•*-]\s*/, "").replace(/\s+/g, " ") : "");
+  const list = (v: unknown) => (Array.isArray(v) ? v.map(line).filter(Boolean).slice(0, 8) : []);
+  const blocks: string[] = [`Hi ${line(fe.first_name) || "there"},`, line(fe.opener) || "Thanks for the time today. Here is where we landed."];
+  for (const [key, label] of EMAIL_SECTIONS) {
+    const items = list(fe[key]);
+    if (items.length) blocks.push([label, ...items.map((i) => `• ${i}`)].join("\n"));
+  }
+  blocks.push(line(fe.closing) || "Talk soon.");
+  blocks.push(signoff);
+  return blocks.join("\n\n");
+}
+
+function normalize(x: unknown, shortSubject: string, signoff: string): MeetingAnalysis {
   const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
   const str = (v: unknown, fb = ""): string => {
     if (typeof v !== "string") return fb;
@@ -235,7 +266,10 @@ function normalize(x: unknown, shortSubject: string): MeetingAnalysis {
     action_items_us: items(o.action_items_us),
     action_items_them: items(o.action_items_them),
     followup_email_subject: shortSubject,
-    followup_email_body: str(o.followup_email_body, ""),
+    followup_email_body:
+      o.followup_email && typeof o.followup_email === "object"
+        ? buildEmail(o.followup_email as Record<string, unknown>, signoff)
+        : str(o.followup_email_body, ""),
     next_meeting_focus: str(o.next_meeting_focus, ""),
   };
 }

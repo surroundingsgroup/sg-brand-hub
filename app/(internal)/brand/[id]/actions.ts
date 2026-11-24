@@ -41,6 +41,7 @@ type BrandPatch = Partial<{
   tagline: string | null;
   vertical: string | null;
   vertical_other: string | null;
+  vertical_type: string | null;
   submitter_name: string | null;
   submitter_email: string | null;
   submitter_phone: string | null;

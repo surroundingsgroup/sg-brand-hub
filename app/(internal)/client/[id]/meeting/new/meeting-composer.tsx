@@ -30,6 +30,7 @@ import {
 import { useDictation } from "@/components/dictation/use-dictation";
 import { DictationPill } from "@/components/dictation/dictation-pill";
 import { SummaryList } from "@/components/meetings/summary-list";
+import { EmailPreview, copyEmail } from "@/components/meetings/email-preview";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,6 +87,7 @@ export function MeetingComposer({
 
   const [meetingDate, setMeetingDate] = useState<string>(today());
   const [rawNotes, setRawNotes] = useState("");
+  const [editingEmail, setEditingEmail] = useState(false);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const modeRef = useRef<"dictate" | "meeting" | null>(null);
 
@@ -440,12 +442,11 @@ Examples:
                     </a>
                   ) : null
                 }
-                onCopy={() =>
-                  copy(
-                    `Subject: ${analysis.followup_email_subject}\n\n${analysis.followup_email_body}`,
-                    "Follow-up email"
-                  )
-                }
+                onCopy={async () => {
+                  const ok = await copyEmail(analysis.followup_email_body);
+                  if (ok) toast.success("Email copied, formatted. Paste it into Gmail.");
+                  else toast.error("Couldn't copy.");
+                }}
               >
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -461,16 +462,29 @@ Examples:
                     }
                     className="h-8 text-[13px]"
                   />
-                  <label className="mt-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    Body
-                  </label>
-                  <AutoTextarea
-                    value={analysis.followup_email_body}
-                    onChange={(v) =>
-                      setAnalysis((a) => ({ ...a, followup_email_body: v }))
-                    }
-                    rows={16}
-                  />
+                  <div className="mt-2 flex items-baseline justify-between">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      Body
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setEditingEmail((e) => !e)}
+                      className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {editingEmail ? "Done editing" : "Edit"}
+                    </button>
+                  </div>
+                  {editingEmail ? (
+                    <AutoTextarea
+                      value={analysis.followup_email_body}
+                      onChange={(v) =>
+                        setAnalysis((a) => ({ ...a, followup_email_body: v }))
+                      }
+                      rows={18}
+                    />
+                  ) : (
+                    <EmailPreview body={analysis.followup_email_body} />
+                  )}
                 </div>
               </OutputCard>
 

@@ -59,6 +59,22 @@ export function buildApprovalChecklist(
       done: hasPrimaryColor,
     },
     {
+      key: "vertical",
+      label: "Vertical",
+      tab: "overview",
+      done: trimBlank(brand.vertical) && (brand.vertical !== "other" || trimBlank(brand.vertical_other)),
+    },
+    {
+      key: "vertical_type",
+      label: "Vertical type",
+      hint:
+        "vertical_type" in brand
+          ? "The type of business within the vertical (e.g. Property Management)."
+          : "Needs one database update first (Billy).",
+      tab: "overview",
+      done: trimBlank(brand.vertical_type),
+    },
+    {
       key: "overview",
       label: "Brand overview written",
       hint: "The share page header pulls from this.",
@@ -141,12 +157,6 @@ export function buildApprovalChecklist(
   ];
 
   const recommended: ChecklistItem[] = [
-    {
-      key: "vertical",
-      label: "Vertical / industry",
-      tab: "overview",
-      done: trimBlank(brand.vertical),
-    },
     {
       key: "brand_voice",
       label: "Brand voice description",

@@ -33,6 +33,7 @@ import { ContactTile } from "@/components/client-profile/contact-tile";
 import { NeedsYouBar } from "@/components/client-profile/needs-you-bar";
 import { OnboardingTile } from "@/components/client-profile/onboarding-tile";
 import { loadOnboardingChecklist } from "@/lib/onboarding/checklist";
+import { fetchClientLifecycle } from "@/lib/meetings/calendar";
 import { AllocationTile } from "@/components/client-profile/allocation-tile";
 import { boardHoursFor, fetchBoardAllocations } from "@/lib/allocations/board-hours";
 import { fetchInvoices, invoicesFor } from "@/lib/monday/invoicing";
@@ -92,6 +93,9 @@ export default async function ClientProfilePage({
   const typedScope = (b as unknown as { scope?: BrandScope | null }).scope ?? null;
   // Hours on the Monday Allocation board, for the rate math on the Allocation card.
   const boardAllocationsPromise = fetchBoardAllocations();
+  // Lifecycle meetings for the onboarding checklist (calendar, ~a year ahead);
+  // started now so it runs alongside everything else.
+  const lifecyclePromise = fetchClientLifecycle(b.business_name);
   // Invoices for this client, from the Monday Invoicing board.
   const invoicesPromise = fetchInvoices();
   const viewerPromise = getViewer(supabase);
@@ -210,7 +214,9 @@ export default async function ClientProfilePage({
   const socialdeskUrl = pulseData.client_id
     ? `${process.env.SOCIALDESK_URL ?? "https://socialdesk-lac.vercel.app"}/#/client/${pulseData.client_id}`
     : null;
+  const lifecycle = await lifecyclePromise;
   const onboarding = await loadOnboardingChecklist({
+    lifecycle,
     supabase,
     brand: b,
     imageLogoCount: ((logos ?? []) as { logo_type?: string | null }[]).filter((l) => l.logo_type !== "reference").length,
@@ -226,7 +232,11 @@ export default async function ClientProfilePage({
     })(),
   });
   const brandAgeDays = (Date.now() - new Date((b as unknown as { created_at?: string }).created_at ?? 0).getTime()) / 86_400_000;
-  const showOnboarding = onboarding.done < onboarding.total || brandAgeDays <= 30;
+  // New clients (first 120 days) get the checklist up top while anything is
+  // left (and for 30 days regardless). Older clients keep it folded at the
+  // bottom of the page, so it is there to check without taking over the page.
+  const newClient = brandAgeDays <= 120;
+  const showOnboarding = newClient && (onboarding.done < onboarding.total || brandAgeDays <= 30);
 
   // Scope tile inputs, straight from the Monday 🚦 All Projects board:
   // Client + Project Type + Shoot Date. Each dated project is classified by
@@ -462,6 +472,8 @@ export default async function ClientProfilePage({
             </TileEmpty>
           )}
         </Tile>
+        {/* Older clients: the onboarding checklist, folded, to check anytime. */}
+        {!newClient ? <OnboardingTile brandId={b.id} checklist={onboarding} collapsed /> : null}
       </div>
     </div>
   );

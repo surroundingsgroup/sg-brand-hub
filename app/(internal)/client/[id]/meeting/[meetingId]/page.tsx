@@ -4,6 +4,7 @@
 
 import { notFound } from "next/navigation";
 import { SummaryList } from "@/components/meetings/summary-list";
+import { EmailPreview } from "@/components/meetings/email-preview";
 import Link from "next/link";
 import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -176,9 +177,7 @@ export default async function SavedMeetingPage({
                     </div>
                   ) : null}
                   {m.followup_email_body ? (
-                    <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">
-                      {m.followup_email_body}
-                    </p>
+                    <EmailPreview body={m.followup_email_body} />
                   ) : null}
                 </div>
               </Card>
