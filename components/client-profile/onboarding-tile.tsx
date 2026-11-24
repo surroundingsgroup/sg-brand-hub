@@ -124,7 +124,9 @@ export function OnboardingTile({
                   </div>
                 ) : null}
                 {i.hint && !i.done ? <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">{i.hint}</div> : null}
-                {i.hint && i.done && i.key === "am" ? <div className="mt-0.5 text-[11.5px] text-muted-foreground">{i.hint}</div> : null}
+                {i.hint && i.done && (i.key === "am" || i.key === "kickoff") ? (
+                  <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{i.hint}</div>
+                ) : null}
               </div>
             </li>
           );

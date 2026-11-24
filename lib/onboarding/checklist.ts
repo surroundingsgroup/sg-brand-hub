@@ -238,7 +238,7 @@ function meetingItems(b: Brand, lc: ClientLifecycle): OnboardingItem[] {
       href: kickoff ? undefined : newEventLink(b, "Kickoff", true),
       hrefLabel: kickoff ? `${kickoff.upcoming ? "" : "Held "}${shortDay(kickoff.start)}` : "Schedule",
       hint: kickoff
-        ? undefined
+        ? `${kickoff.upcoming ? "On the calendar" : "Held"} ${shortDay(kickoff.start)}: ${kickoff.title}`
         : unreadable
           ? "Couldn't read the calendar just now"
           : "Put a meeting with \"Kickoff\" in the title on the AM's calendar",
