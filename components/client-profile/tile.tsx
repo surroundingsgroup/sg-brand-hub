@@ -10,6 +10,7 @@ import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Tile({
+  id,
   label,
   icon,
   sublabel,
@@ -21,6 +22,8 @@ export function Tile({
   className,
   accent = "default",
 }: {
+  /** Anchor so other pages can link straight to this tile (/client/<id>#<id>). */
+  id?: string;
   label: string;
   icon?: React.ReactNode;
   /** Optional one-line hint rendered under the label. */
@@ -38,6 +41,7 @@ export function Tile({
 }) {
   return (
     <section
+      id={id}
       data-tile-label={label}
       className={cn(
         // Base: white panel, hairline border, subtle lift shadow.

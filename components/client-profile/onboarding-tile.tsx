@@ -36,7 +36,7 @@ export function OnboardingTile({ brandId, checklist }: { brandId: string; checkl
   }
 
   return (
-    <Tile label="Onboarding" icon={<ClipboardCheck />} sublabel={`${done} of ${items.length} set up`} spans={2}>
+    <Tile id="onboarding" label="Onboarding" icon={<ClipboardCheck />} sublabel={`${done} of ${items.length} set up`} spans={2}>
       <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
         <div
           className={cn("h-full rounded-full transition-all duration-500", done === items.length ? "bg-emerald-500" : "bg-accent")}
