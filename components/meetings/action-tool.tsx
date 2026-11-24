@@ -22,6 +22,9 @@ export type ActionToolItem = {
 
 const chip =
   "inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-foreground/80 transition-colors hover:border-foreground/50 hover:text-foreground";
+// The one thing to click for this item.
+const primary =
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-background shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60";
 
 const gcalStamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 
@@ -67,7 +70,7 @@ export function ActionTool({
   const actions: React.ReactNode[] = [];
   if ((item.tool === "edit_request" || item.tool === "project_request") && item.request_url) {
     actions.push(
-      <a key="req" href={item.request_url} target="_blank" rel="noopener noreferrer" className={chip}>
+      <a key="req" href={item.request_url} target="_blank" rel="noopener noreferrer" className={primary}>
         {item.tool === "edit_request" ? <Clapperboard className="h-3 w-3" /> : <FilePlus2 className="h-3 w-3" />}
         {item.tool === "edit_request" ? "Edit request" : "Project request"}
         <ArrowUpRight className="h-3 w-3 opacity-60" />
@@ -77,7 +80,7 @@ export function ActionTool({
   if (item.tool === "revision_request") {
     actions.push(
       item.revise_url ? (
-        <a key="rev" href={item.revise_url} target="_blank" rel="noopener noreferrer" className={chip} title={item.revise_project}>
+        <a key="rev" href={item.revise_url} target="_blank" rel="noopener noreferrer" className={primary} title={item.revise_project}>
           <PenLine className="h-3 w-3" />
           Request revision{item.revise_project ? `: ${item.revise_project.split("|").pop()?.trim()}` : ""}
           <ArrowUpRight className="h-3 w-3 opacity-60" />
@@ -96,7 +99,7 @@ export function ActionTool({
           <ArrowUpRight className="h-3 w-3 opacity-60" />
         </a>
       ) : (
-        <button key="sd" type="button" onClick={addToNotebook} disabled={sd === "busy"} className={chip}>
+        <button key="sd" type="button" onClick={addToNotebook} disabled={sd === "busy"} className={primary}>
           {sd === "busy" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Share2 className="h-3 w-3" />}
           Add to SocialDesk notebook
         </button>
@@ -104,6 +107,11 @@ export function ActionTool({
     );
   }
   if (item.tool === "meeting" && item.slots?.length) {
+    actions.push(
+      <span key="pick" className="mr-0.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Open times
+      </span>
+    );
     for (const s of item.slots) {
       const q = new URLSearchParams({
         text: `${brandName} | ${item.meeting?.title ?? item.task}`,

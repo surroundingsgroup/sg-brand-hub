@@ -33,6 +33,7 @@ import { SummaryList } from "@/components/meetings/summary-list";
 import { EmailPreview, copyEmail } from "@/components/meetings/email-preview";
 import { OpenInGmail } from "@/components/meetings/open-in-gmail";
 import { ActionTool, type ActionToolItem } from "@/components/meetings/action-tool";
+import { RecapHero } from "@/components/meetings/recap-hero";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -378,22 +379,15 @@ Examples:
             <EmptyState />
           ) : (
             <>
-              {analysis.sources?.length ? (
-                <p className="px-1 text-[11.5px] leading-relaxed text-muted-foreground">
-                  Read with {analysis.sources.length} recent email{analysis.sources.length === 1 ? "" : "s"} with the client:{" "}
-                  {analysis.sources
-                    .slice(0, 3)
-                    .map((x) => `"${x.subject.replace(/^(re|fw|fwd):\s*/i, "")}"`)
-                    .join(", ")}
-                  {analysis.sources.length > 3 ? ` and ${analysis.sources.length - 3} more` : ""}
-                </p>
-              ) : null}
-              <OutputCard title="Summary">
-                <SummaryList text={analysis.summary} />
-              </OutputCard>
+              <RecapHero
+                summary={analysis.summary}
+                focus={analysis.next_meeting_focus}
+                sources={analysis.sources}
+                clientName={brandName}
+              />
 
               <OutputCard
-                title="Action items — us"
+                title={`Our next steps${analysis.action_items_us.length ? ` · ${analysis.action_items_us.length}` : ""}`}
                 icon={<ListChecks className="h-3.5 w-3.5" />}
                 onCopy={() =>
                   copy(
@@ -411,6 +405,7 @@ Examples:
                   }
                   emptyLabel="Nothing we promised."
                   renderTool={(it) => <ActionTool item={it} brandId={brandId} brandName={brandName} pocEmail={pocEmail} />}
+                  numbered
                 />
                 {analysis.action_items_us.length ? (
                   <p className="mt-3 text-[11px] text-muted-foreground">
@@ -420,7 +415,7 @@ Examples:
               </OutputCard>
 
               <OutputCard
-                title="Action items — client"
+                title={`On ${pocName ? pocName.split(" ")[0] : "the client"}'s side`}
                 icon={<Users className="h-3.5 w-3.5" />}
                 onCopy={() =>
                   copy(
@@ -492,16 +487,7 @@ Examples:
                 </div>
               </OutputCard>
 
-              {analysis.next_meeting_focus ? (
-                <div className="rounded-xl border border-border/70 bg-panel p-4">
-                  <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    Next meeting focus
-                  </div>
-                  <p className="mt-1.5 text-[13px] text-foreground/90">
-                    {analysis.next_meeting_focus}
-                  </p>
-                </div>
-              ) : null}
+
             </>
           )}
         </div>
@@ -591,12 +577,15 @@ function ActionList({
   onChange,
   emptyLabel,
   renderTool,
+  numbered = false,
 }: {
   items: ActionItem[];
   onChange: (next: ActionItem[]) => void;
   emptyLabel: string;
   /** The next-step buttons under an item (ours only). */
   renderTool?: (item: ActionItem) => React.ReactNode;
+  /** Numbered steps instead of bullets (ours). */
+  numbered?: boolean;
 }) {
   function update(i: number, patch: Partial<ActionItem>) {
     onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -630,13 +619,19 @@ function ActionList({
           key={i}
           className="flex items-start gap-2.5 border-b border-border/40 pb-2.5 last:border-b-0 last:pb-0"
         >
-          <div className="pt-1.5 text-muted-foreground">•</div>
+          {numbered ? (
+            <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-foreground text-[10.5px] font-semibold text-background">
+              {i + 1}
+            </div>
+          ) : (
+            <div className="pt-1.5 text-muted-foreground">•</div>
+          )}
           <div className="flex-1 space-y-1.5">
             <textarea
               value={it.task}
               onChange={(e) => update(i, { task: e.target.value })}
               rows={1}
-              className="w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-snug text-foreground focus:outline-none"
+              className={`w-full resize-none border-0 bg-transparent p-0 leading-snug text-foreground focus:outline-none ${numbered ? "text-[13.5px] font-medium" : "text-[13px]"}`}
               placeholder="Action item…"
             />
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
