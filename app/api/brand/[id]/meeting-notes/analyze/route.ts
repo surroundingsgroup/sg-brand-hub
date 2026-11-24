@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { fetchBriefsForClient } from "@/lib/briefs/fetch";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -33,10 +34,24 @@ type AnalyzeBody = {
   raw_notes?: string;
 };
 
+// What to do about an action item, picked by the analyzer:
+//   edit_request / project_request -> Brief tool request, filled in (links included)
+//   revision_request -> the matching brief's Revisions tab
+//   social_task -> the client's SocialDesk notebook (To Produce)
+//   meeting -> proposed open times (also offered in the email)
+//   todo -> just the owner's To-dos
+export type ActionTool = "edit_request" | "project_request" | "revision_request" | "social_task" | "meeting" | "todo";
 export type ActionItem = {
   task: string;
   owner?: string | null;
   due?: string | null;
+  tool?: ActionTool;
+  links?: string[];
+  request_url?: string; // edit / project request, filled in
+  revise_url?: string; // revision request on the matched brief
+  revise_project?: string;
+  meeting?: { title: string; minutes: number; with_client: boolean };
+  slots?: { start: string; end: string; label: string }[];
 };
 
 export type MeetingAnalysis = {
@@ -84,6 +99,10 @@ export async function POST(
   }
 
   const clientName = brand.business_name as string;
+  // The client's briefs, so a revision request can point at the right one.
+  const briefList = (await fetchBriefsForClient(clientName).catch(() => ({ briefs: [] as Awaited<ReturnType<typeof fetchBriefsForClient>>["briefs"] }))).briefs
+    .slice(0, 40)
+    .map((b) => ({ id: b.id, project: b.project, type: b.project_type, date: b.date, url: b.revisions_url ?? `${b.url}?tab=revisions` }));
   const pocName = (brand.submitter_name as string | null) || "the client";
   const pocEmail = brand.submitter_email as string | null;
   const amName = (brand.account_manager as string | null) || "the AM";
@@ -105,6 +124,9 @@ Account Manager: ${amName}
 Meeting type: ${meetingLabel}
 Meeting date: ${body.meeting_date || "today"}
 
+The client's current briefs (for revision requests), as id | project | type | date:
+${briefList.length ? briefList.map((b) => `${b.id} | ${b.project} | ${b.type ?? ""} | ${b.date ?? ""}`).join("\n") : "(none)"}
+
 Raw notes from the meeting:
 """
 ${rawNotes}
@@ -115,7 +137,16 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
 {
   "summary": "3 to 6 bullet lines, one per topic, each starting with '- ' and separated by a newline. Lead each with the topic and a colon, then what was decided, in 20 words or fewer (e.g. '- Emails: revisions on all five, lighter copy in sequence one'). Keep numbers, dates and names from the notes. No intro line, no paragraph.",
   "action_items_us": [
-    { "task": "verb-first, concrete", "owner": "SG team member if named, else null", "due": "date or relative like 'by Friday' if mentioned, else null" }
+    {
+      "task": "verb-first and SHORT, 8 words or fewer (the details go in the request below)",
+      "owner": "SG team member if named, else null",
+      "due": "date or relative like 'by Friday' if mentioned, else null",
+      "tool": "one of: edit_request (editing existing photos or video, retouching, cutting), project_request (a new design, graphic, email build or production to make), revision_request (design changes to delivered work that has a brief in the list below: layout, copy, CTA, footer), social_task (social media posts and content updates the SMM handles, including swapping a model name, number or images across content while keeping the rest), meeting (a meeting to set up), todo (anything else)",
+      "brief_id": "for revision_request: the id from the client's briefs list below that this is about, else null",
+      "links": ["every URL from the notes that this item needs (e.g. a Milanote board for a design build)"],
+      "request": { "project_name": "for edit_request / project_request: a clear project name, e.g. 'Email sequence two build'", "project_type": "one of: Edit Request, Professional Content Shoot, Micro Content Shoot, Standard Listing, Custom / Other", "context": "for edit_request / project_request: 1 to 3 sentences for the editor or designer: what to make, from what, and any detail from the notes" },
+      "meeting": { "title": "for meeting: e.g. '2027 renewal meeting'", "from": "YYYY-MM-DD first day it could be (resolve phrases like 'second week of December' against the meeting date)", "to": "YYYY-MM-DD last day", "minutes": 60, "with_client": true }
+    }
   ],
   "action_items_them": [
     { "task": "what the client needs to do", "owner": "person at the client if named, else null", "due": "date if mentioned, else null" }
@@ -135,6 +166,8 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
 
 Rules:
 - Arrays are [] if nothing fits. Never invent action items.
+- Leave out "request", "meeting" and "brief_id" when they do not apply to an item's tool.
+- For a meeting item, do NOT invent times in the email; the times are added for you. Still list the meeting in coming_up as "<title>: <the window>".
 - The follow-up email should feel complete to someone who was not in the room: specific, concrete, nothing vague like "next steps discussed". Use every concrete detail in the notes; never add facts that are not there.
 - action_items_us = things SG owes the client (shoots, edits, strategy, calendar, etc.)
 - action_items_them = things the client owes SG (approvals, assets, feedback, intros, etc.)
@@ -191,7 +224,73 @@ Rules:
     : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
   const subject = `${clientName} | ${SHORT_LABEL[meetingType] ?? "Meeting"} recap, ${day}`;
   void meetingTitle;
+  // Meeting items: real open times from the calendars, offered in the email.
+  const p = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
+  const usRaw = Array.isArray(p.action_items_us) ? (p.action_items_us as Record<string, unknown>[]) : [];
+  const fe = (p.followup_email && typeof p.followup_email === "object" ? p.followup_email : null) as Record<string, unknown> | null;
+  const slotsFor = new Map<number, { start: string; end: string; label: string }[]>();
+  await Promise.all(
+    usRaw.map(async (r, i) => {
+      const m = r?.tool === "meeting" ? (r.meeting as Record<string, unknown> | undefined) : undefined;
+      if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(String(m.from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(m.to))) return;
+      const slots = await freeSlots(clientName, String(m.from), String(m.to), Number(m.minutes) || 60);
+      if (!slots.length) return;
+      slotsFor.set(i, slots);
+      if (fe && m.with_client !== false) {
+        const title = String(m.title || "Our next meeting");
+        // "Monday, Dec 7 at 10 AM; Tuesday, Dec 8 at 11 AM; or Wednesday, Dec 9 at 10 AM"
+        const list = slots.map((s) => {
+          const d = new Date(s.start);
+          const day = d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric" });
+          const time = d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }).replace(":00", "");
+          return `${day} at ${time}`;
+        });
+        const joined = list.length > 1 ? `${list.slice(0, -1).join("; ")}; or ${list[list.length - 1]}` : list[0];
+        const offer = `${title}: would ${joined} work for you?`;
+        const coming = (Array.isArray(fe.coming_up) ? (fe.coming_up as unknown[]) : []).filter(
+          (x) => !(typeof x === "string" && x.toLowerCase().includes(title.toLowerCase().split(" ").slice(-2).join(" ")))
+        );
+        fe.coming_up = [...coming, offer];
+      }
+    })
+  );
+
   const analysis = normalize(parsed, subject, amName === "the AM" ? "The Surroundings team" : amName.split(" ")[0]);
+  // Tool details for the "us" items, in the order the model gave them.
+  const briefTool = (process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com").replace(/\/$/, "");
+  analysis.action_items_us = analysis.action_items_us.map((it, i) => {
+    const r = usRaw.find((x) => typeof x?.task === "string" && scrubDashes(String(x.task).trim()).slice(0, 300) === it.task) ?? usRaw[i] ?? {};
+    const tool = (["edit_request", "project_request", "revision_request", "social_task", "meeting", "todo"] as const).find((t) => t === r.tool) ?? "todo";
+    const links = (Array.isArray(r.links) ? (r.links as unknown[]) : []).filter((l): l is string => typeof l === "string" && /^https?:\/\//.test(l)).slice(0, 5);
+    const out: ActionItem = { ...it, tool, ...(links.length ? { links } : {}) };
+    if (tool === "edit_request" || tool === "project_request") {
+      const req = (r.request ?? {}) as Record<string, unknown>;
+      const q = new URLSearchParams({
+        client: clientName,
+        project: String(req.project_name || it.task).slice(0, 160),
+        type: String(req.project_type || (tool === "edit_request" ? "Edit Request" : "Custom / Other")),
+        context: String(req.context || it.task).slice(0, 1500),
+        from: "meeting",
+      });
+      for (const l of links) q.append("link", l);
+      out.request_url = `${briefTool}/request?${q.toString()}`;
+    }
+    if (tool === "revision_request") {
+      const b = briefList.find((x) => x.id === r.brief_id);
+      if (b) {
+        out.revise_url = b.url;
+        out.revise_project = b.project;
+      }
+    }
+    if (tool === "meeting") {
+      const m = (r.meeting ?? {}) as Record<string, unknown>;
+      out.meeting = { title: String(m.title || it.task), minutes: Number(m.minutes) || 60, with_client: m.with_client !== false };
+      const idx = usRaw.indexOf(r as Record<string, unknown>);
+      const slots = slotsFor.get(idx >= 0 ? idx : i);
+      if (slots) out.slots = slots;
+    }
+    return out;
+  });
   return NextResponse.json(analysis);
 }
 
@@ -273,4 +372,24 @@ function normalize(x: unknown, shortSubject: string, signoff: string): MeetingAn
         : str(o.followup_email_body, ""),
     next_meeting_focus: str(o.next_meeting_focus, ""),
   };
+}
+
+// Open times on the client's AM's and Billy's calendars (Brief tool).
+async function freeSlots(brandName: string, from: string, to: string, minutes: number) {
+  const base = (process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com").replace(/\/$/, "");
+  const token = process.env.HUB_BRIEF_API_TOKEN;
+  if (!token) return [];
+  try {
+    const url = new URL("/api/hub/free-slots", base);
+    url.searchParams.set("brand_name", brandName);
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+    url.searchParams.set("minutes", String(minutes));
+    url.searchParams.set("count", "3");
+    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const body = (await res.json()) as { slots?: { start: string; end: string; label: string }[] };
+    return Array.isArray(body.slots) ? body.slots : [];
+  } catch {
+    return [];
+  }
 }

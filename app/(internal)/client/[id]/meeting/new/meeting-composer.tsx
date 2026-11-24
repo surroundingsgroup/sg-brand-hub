@@ -32,12 +32,13 @@ import { DictationPill } from "@/components/dictation/dictation-pill";
 import { SummaryList } from "@/components/meetings/summary-list";
 import { EmailPreview, copyEmail } from "@/components/meetings/email-preview";
 import { OpenInGmail } from "@/components/meetings/open-in-gmail";
+import { ActionTool, type ActionToolItem } from "@/components/meetings/action-tool";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 
-type ActionItem = {
+type ActionItem = ActionToolItem & {
   task: string;
   owner?: string | null;
   due?: string | null;
@@ -397,6 +398,7 @@ Examples:
                     setAnalysis((a) => ({ ...a, action_items_us: items }))
                   }
                   emptyLabel="Nothing we promised."
+                  renderTool={(it) => <ActionTool item={it} brandId={brandId} brandName={brandName} pocEmail={pocEmail} />}
                 />
                 {analysis.action_items_us.length ? (
                   <p className="mt-3 text-[11px] text-muted-foreground">
@@ -576,10 +578,13 @@ function ActionList({
   items,
   onChange,
   emptyLabel,
+  renderTool,
 }: {
   items: ActionItem[];
   onChange: (next: ActionItem[]) => void;
   emptyLabel: string;
+  /** The next-step buttons under an item (ours only). */
+  renderTool?: (item: ActionItem) => React.ReactNode;
 }) {
   function update(i: number, patch: Partial<ActionItem>) {
     onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -637,6 +642,7 @@ function ActionList({
                 className="h-5 w-24 border-0 bg-transparent p-0 text-[11px] focus:outline-none"
               />
             </div>
+            {renderTool ? renderTool(it) : null}
           </div>
           <button
             type="button"
