@@ -41,6 +41,11 @@ export default async function NewMeetingPage({
     .single();
   if (!brand) notFound();
   const b = brand as Pick<Brand, "id" | "business_name" | "submitter_name" | "submitter_email" | "account_manager">;
+  // Team names for the owner picker on action items.
+  const { data: team } = await supabase.from("team_profiles").select("name").order("name");
+  const teamNames = ((team ?? []) as { name: string | null }[])
+    .map((p) => (p.name ?? "").trim())
+    .filter(Boolean);
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,6 +73,7 @@ export default async function NewMeetingPage({
         pocName={b.submitter_name ?? null}
         pocEmail={b.submitter_email ?? null}
         amName={b.account_manager ?? null}
+        teamNames={teamNames}
       />
     </div>
   );

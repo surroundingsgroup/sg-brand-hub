@@ -146,7 +146,7 @@ Client: ${clientName}
 Point of contact: ${pocName}${pocEmail ? ` (${pocEmail})` : ""}
 Account Manager: ${amName}
 Meeting type: ${meetingLabel}
-Meeting date: ${body.meeting_date || "today"}
+Meeting date: ${meetingDateLine(body.meeting_date)}
 
 The client's current briefs (for revision requests), as id | project | type | date:
 ${briefList.length ? briefList.map((b) => `${b.id} | ${b.project} | ${b.type ?? ""} | ${b.date ?? ""}`).join("\n") : "(none)"}
@@ -167,7 +167,7 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
     {
       "task": "verb-first and SHORT, 8 words or fewer (the details go in the request below)",
       "owner": "SG team member if named, else null",
-      "due": "date or relative like 'by Friday' if mentioned, else null",
+      "due": "YYYY-MM-DD if any timing is mentioned: work it out from the meeting date ('before Thanksgiving' = the day before Thanksgiving, 'end of next week' = that Friday, 'end of next week or first week of December' = the earlier date). null if no timing at all. Never words.",
       "tool": "one of: edit_request (editing existing photos or video, retouching, cutting), project_request (a new design, graphic, email build or production to make), revision_request (design changes to delivered work that has a brief in the list below: layout, copy, CTA, footer), social_task (social media posts and content updates the SMM handles, including swapping a model name, number or images across content while keeping the rest), meeting (a meeting to set up), todo (anything else)",
       "brief_id": "for revision_request: the id from the client's briefs list below that this is about, else null",
       "links": ["every URL from the notes that this item needs (e.g. a Milanote board for a design build)"],
@@ -176,7 +176,7 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
     }
   ],
   "action_items_them": [
-    { "task": "what the client needs to do", "owner": "person at the client if named, else null", "due": "date if mentioned, else null" }
+    { "task": "what the client needs to do", "owner": "person at the client if named, else null", "due": "YYYY-MM-DD worked out from the meeting date if timing is mentioned ('today' = the meeting date), else null" }
   ],
   "followup_email_subject": "Ignored (the subject is set for you). Return an empty string.",
   "followup_email": {
@@ -422,4 +422,13 @@ async function freeSlots(brandName: string, from: string, to: string, minutes: n
   } catch {
     return [];
   }
+}
+
+// "2026-11-24 (Tuesday)" so the model can turn "end of next week" into a date.
+function meetingDateLine(raw: string | undefined): string {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw ?? "")
+    ? (raw as string)
+    : new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const weekday = new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+  return `${iso} (${weekday})`;
 }

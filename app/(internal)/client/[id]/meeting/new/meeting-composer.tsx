@@ -26,6 +26,8 @@ import {
   Mic,
   AudioLines,
   Square,
+  UserRound,
+  CalendarClock,
 } from "lucide-react";
 import { useDictation } from "@/components/dictation/use-dictation";
 import { DictationPill } from "@/components/dictation/dictation-pill";
@@ -65,6 +67,11 @@ const EMPTY: Analysis = {
   next_meeting_focus: "",
 };
 
+// "Bertram Yachts'" not "Bertram Yachts's".
+function possessive(name: string): string {
+  return /s$/i.test(name.trim()) ? `${name.trim()}'` : `${name.trim()}'s`;
+}
+
 function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -78,7 +85,9 @@ export function MeetingComposer({
   pocName,
   pocEmail,
   amName,
+  teamNames = [],
 }: {
+  teamNames?: string[];
   brandId: string;
   brandName: string;
   meetingType: string;
@@ -156,6 +165,47 @@ export function MeetingComposer({
   const [analysis, setAnalysis] = useState<Analysis>(EMPTY);
   const [analyzed, setAnalyzed] = useState(false);
 
+  // Keep a draft on this device so a refresh or a closed tab mid-meeting
+  // never loses the dump. Cleared on Save.
+  const draftKey = `sg-meeting-draft:${brandId}:${meetingType}`;
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw) as { notes?: string; date?: string; analysis?: Analysis | null; at?: number };
+        // Older than three days is stale.
+        if (d.at && Date.now() - d.at < 3 * 86400000 && (d.notes || "").trim()) {
+          setRawNotes(d.notes || "");
+          if (d.date) setMeetingDate(d.date);
+          if (d.analysis) {
+            setAnalysis({ ...EMPTY, ...d.analysis });
+            setAnalyzed(true);
+          }
+          toast.message("Picked up your unsaved notes.");
+        } else {
+          window.localStorage.removeItem(draftKey);
+        }
+      }
+    } catch {}
+    restored.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => {
+      try {
+        if (!rawNotes.trim()) window.localStorage.removeItem(draftKey);
+        else
+          window.localStorage.setItem(
+            draftKey,
+            JSON.stringify({ notes: rawNotes, date: meetingDate, analysis: analyzed ? analysis : null, at: Date.now() })
+          );
+      } catch {}
+    }, 400);
+    return () => clearTimeout(t);
+  }, [rawNotes, meetingDate, analysis, analyzed, draftKey]);
+
   async function analyze() {
     if (rawNotes.trim().length < 10) {
       toast.error("Jot down a few sentences first.");
@@ -223,6 +273,9 @@ export function MeetingComposer({
         return;
       }
       const saved = (await res.json().catch(() => ({}))) as { todos_added?: number };
+      try {
+        window.localStorage.removeItem(draftKey);
+      } catch {}
       toast.success(
         saved.todos_added
           ? `Meeting notes saved. ${saved.todos_added} action item${saved.todos_added === 1 ? "" : "s"} added to To-dos.`
@@ -281,8 +334,8 @@ export function MeetingComposer({
 
       {/* Two-column layout: notes on left, output on right */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        {/* LEFT — raw notes */}
-        <div className="flex flex-col">
+        {/* LEFT — raw notes (stays in view while the output scrolls) */}
+        <div className="flex flex-col md:sticky md:top-20 md:self-start">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Raw notes
@@ -335,7 +388,9 @@ Examples:
 • Client wants more reels, fewer static posts
 • Sasha asked about analytics report format
 • Follow up with Sarah re: brand guidelines v2`}
-            className="min-h-[520px] resize-y bg-panel text-[13px] leading-relaxed"
+            className={`resize-y bg-panel text-[13px] leading-relaxed ${
+              analyzed ? "min-h-[260px] md:h-[calc(100vh-15rem)]" : "min-h-[520px]"
+            }`}
           />
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button
@@ -368,14 +423,16 @@ Examples:
               </Button>
             ) : null}
             <span className="text-[11px] text-muted-foreground">
-              Your dump stays private — we save when you click Save.
+              Kept on this device until you save. Only the team sees it after.
             </span>
           </div>
         </div>
 
         {/* RIGHT — AI output */}
         <div id="meeting-output" className="flex flex-col gap-4">
-          {!analyzed ? (
+          {analyzing ? (
+            <AnalyzingState brandName={brandName} pocName={pocName} />
+          ) : !analyzed ? (
             <EmptyState />
           ) : (
             <>
@@ -406,6 +463,7 @@ Examples:
                   emptyLabel="Nothing we promised."
                   renderTool={(it) => <ActionTool item={it} brandId={brandId} brandName={brandName} pocEmail={pocEmail} />}
                   numbered
+                  ownerOptions={teamNames}
                 />
                 {analysis.action_items_us.length ? (
                   <p className="mt-3 text-[11px] text-muted-foreground">
@@ -415,7 +473,7 @@ Examples:
               </OutputCard>
 
               <OutputCard
-                title={`On ${pocName ? pocName.split(" ")[0] : "the client"}'s side`}
+                title={`On ${pocName ? possessive(pocName.split(" ")[0]) : "the client's"} side`}
                 icon={<Users className="h-3.5 w-3.5" />}
                 onCopy={() =>
                   copy(
@@ -432,6 +490,7 @@ Examples:
                     setAnalysis((a) => ({ ...a, action_items_them: items }))
                   }
                   emptyLabel="Nothing owed from them."
+                  ownerOptions={pocName ? [pocName] : []}
                 />
               </OutputCard>
 
@@ -495,6 +554,60 @@ Examples:
       {voice.active ? (
         <DictationPill mode={voice.active} level={voice.level} interim={voice.interim} startedAt={voice.startedAt} onStop={() => toggleVoice(voice.active!)} />
       ) : null}
+    </div>
+  );
+}
+
+// What the AI is doing while Analyze runs (it reads the notes, the client's
+// open projects, Billy's calendar and recent email, then writes).
+function AnalyzingState({ brandName, pocName }: { brandName: string; pocName: string | null }) {
+  const first = pocName ? pocName.split(" ")[0] : "the client";
+  const steps = [
+    "Reading your notes",
+    `Matching to ${possessive(brandName)} open projects`,
+    "Finding open times on the calendar",
+    `Reading recent email with ${first}`,
+    "Picking the right tool for each next step",
+    `Writing the recap for ${first}`,
+  ];
+  const [at, setAt] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setAt((n) => Math.min(n + 1, steps.length - 1)), 4500);
+    return () => clearInterval(t);
+  }, [steps.length]);
+  return (
+    <div className="relative flex min-h-[520px] flex-col justify-center overflow-hidden rounded-xl bg-[#0F0F0F] p-8 text-[#F7F4F0]">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 animate-pulse rounded-full bg-[#FFBD83]/10 blur-3xl" />
+      <div className="mb-6 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#FFBD83]">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FFBD83]" />
+        Working on {brandName}
+      </div>
+      <ol className="space-y-3.5">
+        {steps.map((label, i) => {
+          const done = i < at;
+          const now = i === at;
+          return (
+            <li
+              key={label}
+              className={`flex items-center gap-3 text-[13.5px] transition-all duration-500 ${
+                done ? "text-[#F7F4F0]/45" : now ? "text-[#F7F4F0]" : "text-[#F7F4F0]/20"
+              }`}
+            >
+              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                {done ? (
+                  <Check className="h-3.5 w-3.5 text-[#FFBD83]" />
+                ) : now ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#FFBD83]" />
+                ) : (
+                  <span className="h-1 w-1 rounded-full bg-current" />
+                )}
+              </span>
+              {label}
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-8 text-[11px] text-[#F7F4F0]/40">Usually under a minute.</p>
     </div>
   );
 }
@@ -578,7 +691,10 @@ function ActionList({
   emptyLabel,
   renderTool,
   numbered = false,
+  ownerOptions = [],
 }: {
+  /** Names offered in the owner picker. */
+  ownerOptions?: string[];
   items: ActionItem[];
   onChange: (next: ActionItem[]) => void;
   emptyLabel: string;
@@ -631,23 +747,20 @@ function ActionList({
               value={it.task}
               onChange={(e) => update(i, { task: e.target.value })}
               rows={1}
-              className={`w-full resize-none border-0 bg-transparent p-0 leading-snug text-foreground focus:outline-none ${numbered ? "text-[13.5px] font-medium" : "text-[13px]"}`}
+              ref={growToFit}
+              onInput={(e) => growToFit(e.currentTarget)}
+              className={`w-full resize-none overflow-hidden border-0 bg-transparent p-0 leading-snug text-foreground focus:outline-none ${numbered ? "text-[13.5px] font-medium" : "text-[13px]"}`}
               placeholder="Action item…"
             />
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              <input
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <MetaChip
+                icon={<UserRound className="h-3 w-3" />}
                 value={it.owner ?? ""}
-                onChange={(e) => update(i, { owner: e.target.value || null })}
-                placeholder="Owner"
-                className="h-5 w-24 border-0 bg-transparent p-0 text-[11px] focus:outline-none"
+                placeholder="Add owner"
+                options={ownerOptions}
+                onChange={(v) => update(i, { owner: v || null })}
               />
-              <span className="text-foreground/20">·</span>
-              <input
-                value={it.due ?? ""}
-                onChange={(e) => update(i, { due: e.target.value || null })}
-                placeholder="Due"
-                className="h-5 w-24 border-0 bg-transparent p-0 text-[11px] focus:outline-none"
-              />
+              <DueChip value={it.due ?? ""} onChange={(v) => update(i, { due: v || null })} />
             </div>
             {renderTool ? renderTool(it) : null}
           </div>
@@ -671,5 +784,97 @@ function ActionList({
         </button>
       </li>
     </ul>
+  );
+}
+
+// Grow a one-line textarea to fit what is in it.
+function growToFit(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+// Owner / due as small editable chips that size to their text.
+function MetaChip({
+  icon,
+  value,
+  placeholder,
+  options = [],
+  onChange,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  placeholder: string;
+  options?: string[];
+  onChange: (v: string) => void;
+}) {
+  const listId = useRef(`chip-${Math.random().toString(36).slice(2, 9)}`).current;
+  const width = `${Math.max(value ? Math.ceil(value.length * 0.9) : placeholder.length, 6) + 1}ch`;
+  return (
+    <label
+      className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 transition-colors focus-within:border-foreground/50 ${
+        value ? "border-border bg-muted/60 text-foreground/80" : "border-dashed border-border/80 text-muted-foreground/70"
+      }`}
+    >
+      {icon}
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ width }}
+        list={options.length ? listId : undefined}
+        className="h-5 min-w-0 border-0 bg-transparent p-0 text-[11px] placeholder:text-muted-foreground/60 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden"
+      />
+      {options.length ? (
+        <datalist id={listId}>
+          {options.map((o) => (
+            <option key={o} value={o} />
+          ))}
+        </datalist>
+      ) : null}
+    </label>
+  );
+}
+
+// Due date as a chip: real dates read "Wed, Nov 25" and open a date picker;
+// loose ones the AI wrote ("end of next week") show as written until picked.
+function DueChip({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  let label = value;
+  if (iso) {
+    const d = new Date(`${value}T12:00:00`);
+    label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  }
+  return (
+    <span
+      className={`relative inline-flex h-6 items-center gap-1 rounded-full border px-2 transition-colors focus-within:border-foreground/50 ${
+        value ? "border-border bg-muted/60 text-foreground/80" : "border-dashed border-border/80 text-muted-foreground/70"
+      }`}
+    >
+      <CalendarClock className="h-3 w-3" />
+      <span className="text-[11px]">{label || "Add due"}</span>
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="relative z-10 -mr-0.5 ml-0.5 text-[11px] leading-none text-muted-foreground/60 hover:text-foreground"
+          aria-label="Clear due date"
+        >
+          ×
+        </button>
+      ) : null}
+      <input
+        type="date"
+        value={iso ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => {
+          try {
+            e.currentTarget.showPicker();
+          } catch {}
+        }}
+        aria-label="Due date"
+        className={`absolute inset-0 cursor-pointer opacity-0 ${value ? "right-5" : ""}`}
+      />
+    </span>
   );
 }
