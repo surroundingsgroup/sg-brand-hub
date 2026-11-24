@@ -19,6 +19,8 @@ import { PdfLinkField } from "@/components/brand/pdf-link-field";
 import { ShareLinkButton } from "@/components/brand/share-link-button";
 import { DeleteBrandButton } from "@/components/brand/delete-brand-button";
 import { RequestVideoAssetsButton } from "@/components/brand/request-video-assets-button";
+import { MergeDuplicateBanner } from "@/components/brand/merge-duplicate-banner";
+import { findDuplicateBrands } from "@/lib/brands/duplicates";
 import { updateBrand, deleteLogo, reorderLogos } from "./actions";
 import { VERTICAL_LABELS, SELECTABLE_VERTICALS, ENGAGEMENT_LABELS, type Brand, type BrandLogo, type BrandActivityLog } from "@/types/brand";
 import { formatRelativeDate } from "@/lib/utils";
@@ -43,6 +45,13 @@ export default async function BrandDetailPage({
   const b = brand as Brand;
   const brandLogos = (logos ?? []) as BrandLogo[];
   const activityLog = (activity ?? []) as BrandActivityLog[];
+
+  // An intake that is still being reviewed and looks like a client we already
+  // have gets a one-click merge (see MergeDuplicateBanner).
+  const duplicates =
+    b.status === "submitted" || b.status === "draft" || b.status === "in_review"
+      ? await findDuplicateBrands(supabase, { id: b.id, business_name: b.business_name })
+      : [];
 
   // Pre-approve gating. We show the checklist on the page so the AM always
   // knows what's missing; the Approve button blocks until the required items
@@ -82,6 +91,8 @@ export default async function BrandDetailPage({
           </Link>
         </Button>
       </div>
+
+      <MergeDuplicateBanner intakeId={b.id} candidates={duplicates} />
 
       <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
         <div className="flex flex-col gap-1">

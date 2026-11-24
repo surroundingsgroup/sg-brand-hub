@@ -8,6 +8,7 @@ import { ensureBrandFolderTree } from "@/lib/dropbox/client";
 import type { BrandLite } from "@/lib/brands/create-from-deal";
 import { alertError } from "@/lib/notifications/alert";
 import { isEnumRejection, verticalFallback } from "@/types/brand";
+import { isEmailAllowed } from "@/lib/auth/domain";
 
 export async function POST(request: Request) {
   let raw: unknown;
@@ -86,11 +87,25 @@ export async function POST(request: Request) {
     // best-effort — never block an intake submission on the dupe check
   }
 
+  // Someone on our team filling the form in for the client (common after a
+  // deal closes) is not the client's contact. The submitter columns double as
+  // the brand's POC (a database trigger keeps them in step), so leave them
+  // empty and note who filled it in; the AM sets the real contact.
+  const filledByTeam = isEmailAllowed(v.submitter_email);
+  const notes = [
+    dupeNote,
+    filledByTeam ? `Brand intake filled out by ${v.submitter_name} (${v.submitter_email}) on the client's behalf. Add the client's contact.` : null,
+  ].filter(Boolean).join("\n\n");
+
   const intakeRow = {
-      submitter_name: v.submitter_name,
-      submitter_email: v.submitter_email,
-      submitter_phone: v.submitter_phone || null,
-      ...(dupeNote ? { internal_notes: dupeNote } : {}),
+      ...(filledByTeam
+        ? {}
+        : {
+            submitter_name: v.submitter_name,
+            submitter_email: v.submitter_email,
+            submitter_phone: v.submitter_phone || null,
+          }),
+      ...(notes ? { internal_notes: notes } : {}),
 
       business_name: v.business_name,
       website: v.website || null,

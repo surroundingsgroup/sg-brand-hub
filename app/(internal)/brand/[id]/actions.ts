@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isEmailAllowed } from "@/lib/auth/domain";
 import type { Brand, BrandColor, BrandFont } from "@/types/brand";
 import { isEnumRejection, verticalFallback } from "@/types/brand";
 import {
@@ -704,4 +705,78 @@ export async function deleteBrand(id: string) {
 
   await supabase.from("brands").delete().eq("id", id);
   redirect("/dashboard");
+}
+
+// ── Merge a duplicate intake into the existing client ────────────────────────
+//
+// The public intake never overwrites an existing client (anyone can submit
+// it), so a submission for a client that already has a record lands as a
+// second "submitted" record flagged POSSIBLE DUPLICATE. This folds it in:
+// the intake's brand details fill whatever the client record is missing,
+// its logos, activity and any other linked rows move over, and the intake
+// record goes away. Logo files stay where they are (the moved logo rows
+// still point at them), so nothing in storage is touched.
+
+const INTAKE_FIELDS = [
+  "website", "tagline", "vertical", "vertical_other", "overview_client_raw", "look_and_feel",
+  "what_to_avoid", "inspiration_references", "audience_gender", "audience_age", "audience_type",
+  "music_notes", "client_asset_folder_url", "instagram", "facebook", "youtube", "tiktok", "linkedin",
+  "colors", "fonts", "dropbox_folder_url", "source_deal_id", "source_deal_url",
+] as const;
+const LINKED_TABLES = [
+  "brand_logos", "brand_activity_log", "briefs", "brand_projects", "meeting_notes",
+  "monthly_allocations", "closed_won_dispatches",
+] as const;
+const isEmpty = (v: unknown) => v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
+
+export async function mergeIntakeInto(intakeId: string, targetId: string): Promise<{ ok: false; error: string } | void> {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isEmailAllowed(user.email)) return { ok: false, error: "Not signed in." };
+  if (!intakeId || !targetId || intakeId === targetId) return { ok: false, error: "Pick another record to merge into." };
+
+  const [{ data: intake }, { data: target }] = await Promise.all([
+    supabase.from("brands").select("*").eq("id", intakeId).single(),
+    supabase.from("brands").select("*").eq("id", targetId).single(),
+  ]);
+  if (!intake || !target) return { ok: false, error: "One of the records is gone." };
+  const from = intake as Record<string, unknown>;
+  const into = target as Record<string, unknown>;
+
+  const patch: Record<string, unknown> = {};
+  for (const f of INTAKE_FIELDS) if (!isEmpty(from[f]) && isEmpty(into[f])) patch[f] = from[f];
+  // A client-filled intake brings the client's contact; never a team member's.
+  const submitterEmail = String(from.submitter_email ?? "");
+  if (isEmpty(into.poc_name) && !isEmpty(from.submitter_name) && !isEmailAllowed(submitterEmail)) {
+    patch.submitter_name = from.submitter_name;
+    patch.submitter_email = from.submitter_email;
+    patch.submitter_phone = from.submitter_phone;
+  }
+  if (Object.keys(patch).length) {
+    const { error } = await supabase.from("brands").update(patch).eq("id", targetId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  for (const t of LINKED_TABLES) {
+    const { error } = await supabase.from(t).update({ brand_id: targetId }).eq("brand_id", intakeId);
+    if (error && !/does not exist|schema cache/i.test(error.message)) {
+      return { ok: false, error: `Could not move ${t.replace(/_/g, " ")}: ${error.message}` };
+    }
+  }
+
+  await supabase.from("brand_activity_log").insert({
+    brand_id: targetId,
+    user_id: user.id,
+    event_type: "merged_intake",
+    metadata: { from_id: intakeId, submitted_by: from.submitter_name ?? null, filled: Object.keys(patch) },
+  });
+
+  const { error: delErr } = await supabase.from("brands").delete().eq("id", intakeId);
+  if (delErr) return { ok: false, error: `Merged, but the intake record could not be removed: ${delErr.message}` };
+
+  revalidatePath(`/brand/${targetId}`);
+  revalidatePath("/dashboard");
+  redirect(`/brand/${targetId}`);
 }
