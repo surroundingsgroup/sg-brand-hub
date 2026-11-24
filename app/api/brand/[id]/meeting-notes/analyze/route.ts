@@ -63,6 +63,24 @@ export type MeetingAnalysis = {
   next_meeting_focus: string;
 };
 
+// Recent client email threads with their working links (Brief tool; empty
+// until the service account may read Gmail).
+type ClientEmail = { subject: string; date: string; from: string; snippet: string; links: { url: string; label: string }[] };
+async function clientEmails(brandName: string): Promise<ClientEmail[]> {
+  const base = (process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com").replace(/\/$/, "");
+  const token = process.env.HUB_BRIEF_API_TOKEN;
+  if (!token) return [];
+  try {
+    const url = new URL("/api/hub/client-context", base);
+    url.searchParams.set("brand_name", brandName);
+    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(20000) });
+    const body = (await res.json()) as { emails?: ClientEmail[] };
+    return Array.isArray(body.emails) ? body.emails.slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -99,8 +117,14 @@ export async function POST(
   }
 
   const clientName = brand.business_name as string;
-  // The client's briefs, so a revision request can point at the right one.
-  const briefList = (await fetchBriefsForClient(clientName).catch(() => ({ briefs: [] as Awaited<ReturnType<typeof fetchBriefsForClient>>["briefs"] }))).briefs
+  // The client's briefs (so a revision request can point at the right one) and
+  // what the team has been emailing them about (links to galleries, boards,
+  // files), fetched side by side.
+  const [briefsRes, emails] = await Promise.all([
+    fetchBriefsForClient(clientName).catch(() => ({ briefs: [] as Awaited<ReturnType<typeof fetchBriefsForClient>>["briefs"] })),
+    clientEmails(clientName),
+  ]);
+  const briefList = briefsRes.briefs
     .slice(0, 40)
     .map((b) => ({ id: b.id, project: b.project, type: b.project_type, date: b.date, url: b.revisions_url ?? `${b.url}?tab=revisions` }));
   const pocName = (brand.submitter_name as string | null) || "the client";
@@ -126,6 +150,9 @@ Meeting date: ${body.meeting_date || "today"}
 
 The client's current briefs (for revision requests), as id | project | type | date:
 ${briefList.length ? briefList.map((b) => `${b.id} | ${b.project} | ${b.type ?? ""} | ${b.date ?? ""}`).join("\n") : "(none)"}
+
+Recent emails between us and the client, newest first (date | subject | from | links | what the latest message says):
+${emails.length ? emails.map((e) => `${e.date.slice(0, 10)} | ${e.subject} | ${e.from} | ${e.links.map((l) => (l.label ? `${l.label}: ${l.url}` : l.url)).join(" ; ") || "no links"} | ${e.snippet}`).join("\n") : "(none available)"}
 
 Raw notes from the meeting:
 """
@@ -167,6 +194,7 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
 Rules:
 - Arrays are [] if nothing fits. Never invent action items.
 - Leave out "request", "meeting" and "brief_id" when they do not apply to an item's tool.
+- Use the emails as context. When an action item works from something already sent by email (a gallery the client picked favorites in, a board, a file, a folder), put that link in the item's "links" and say in request.context exactly what to pull from it (e.g. "Pull the hearted t-shirt images from the Pixieset gallery's t-shirt section"). Never attach an email link that is not about the item.
 - For a meeting item, do NOT invent times in the email; the times are added for you. Still list the meeting in coming_up as "<title>: <the window>".
 - The follow-up email should feel complete to someone who was not in the room: specific, concrete, nothing vague like "next steps discussed". Use every concrete detail in the notes; never add facts that are not there.
 - action_items_us = things SG owes the client (shoots, edits, strategy, calendar, etc.)
@@ -292,7 +320,8 @@ Rules:
     }
     return out;
   });
-  return NextResponse.json(analysis);
+  // Which emails it read, so the page can say so.
+  return NextResponse.json({ ...analysis, sources: emails.slice(0, 8).map((e) => ({ subject: e.subject, date: e.date })) });
 }
 
 // Strip em/en dashes server-side so the AI can never ship them even if

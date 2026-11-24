@@ -51,6 +51,8 @@ type Analysis = {
   followup_email_subject: string;
   followup_email_body: string;
   next_meeting_focus: string;
+  /** Recent client emails the analyzer read alongside the notes. */
+  sources?: { subject: string; date: string }[];
 };
 
 const EMPTY: Analysis = {
@@ -376,6 +378,16 @@ Examples:
             <EmptyState />
           ) : (
             <>
+              {analysis.sources?.length ? (
+                <p className="px-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                  Read with {analysis.sources.length} recent email{analysis.sources.length === 1 ? "" : "s"} with the client:{" "}
+                  {analysis.sources
+                    .slice(0, 3)
+                    .map((x) => `"${x.subject.replace(/^(re|fw|fwd):\s*/i, "")}"`)
+                    .join(", ")}
+                  {analysis.sources.length > 3 ? ` and ${analysis.sources.length - 3} more` : ""}
+                </p>
+              ) : null}
               <OutputCard title="Summary">
                 <SummaryList text={analysis.summary} />
               </OutputCard>
