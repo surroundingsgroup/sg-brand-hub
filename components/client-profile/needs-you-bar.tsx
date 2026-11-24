@@ -8,11 +8,16 @@
 //   • Posts awaiting AM review (from SocialDesk pulse)
 //   • Briefs in a "ready" status (from the Brief Tool feed)
 //   • Renewal date within 60 days (from scope)
+//   • Creators changed on an upcoming shoot (last 3 days, from the Brief
+//     Tool feed), with "Update invite" right on it while the invite is behind
 //
 // Nothing to flag? → "All clear" state, which is intentionally quiet.
 
 import Link from "next/link";
-import { CalendarCheck, Instagram, Sparkles, AlarmClock, CheckCircle2, Receipt } from "lucide-react";
+import { CalendarCheck, Instagram, Sparkles, AlarmClock, CheckCircle2, Receipt, Users } from "lucide-react";
+import { UpdateInviteButton } from "./update-invite-button";
+import { firstNames, inviteNeedsUpdate, recentCreatorChange, shootAhead } from "@/lib/briefs/invite";
+import { easternToday } from "@/lib/scope/summary";
 import type { HubBrief } from "@/lib/briefs/fetch";
 import type { HubProject } from "@/lib/monday/projects";
 import type { ContentPulse } from "@/lib/socialdesk/fetch";
@@ -25,6 +30,7 @@ type Callout = {
   detail?: string;
   href?: string;
   external?: boolean;
+  action?: React.ReactNode;
 };
 
 export function NeedsYouBar({
@@ -72,6 +78,27 @@ export function NeedsYouBar({
       detail: next.name,
       href: next.mondayUrl,
       external: true,
+    });
+  }
+
+  // Creators changed on an upcoming shoot: say who is on it now, and put the
+  // invite update right here while the invite is behind.
+  const today = easternToday();
+  for (const b of briefs) {
+    const change = recentCreatorChange(b);
+    if (!change || !shootAhead(b, today)) continue;
+    const behind = inviteNeedsUpdate(b);
+    const plural = change.to.includes(",") || change.from.includes(",");
+    callouts.unshift({
+      tone: behind || change.invite === "failed" ? "warn" : "ok",
+      icon: <Users className="h-3.5 w-3.5" />,
+      label: `Creator${plural ? "s" : ""} changed`,
+      detail: `${b.project}: now ${firstNames(change.to)}${
+        !b.has_invite ? ", invite not sent yet" : behind ? "" : ", invite updated"
+      }`,
+      href: behind ? undefined : b.url,
+      external: true,
+      action: behind ? <UpdateInviteButton briefId={b.id} emphasize compact /> : undefined,
     });
   }
 
@@ -167,6 +194,14 @@ export function NeedsYouBar({
         );
         const key = `${c.label}-${i}`;
         const className = `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${classes}`;
+        if (c.action) {
+          return (
+            <div key={key} className={className}>
+              {inner}
+              <span className="ml-1">{c.action}</span>
+            </div>
+          );
+        }
         if (!c.href) {
           return (
             <div key={key} className={className}>

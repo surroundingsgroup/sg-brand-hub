@@ -19,13 +19,15 @@
 //
 // "Project request" and "New brief" start new work in the Brief Tool.
 
-import { Clapperboard, ExternalLink, FolderOpen, Pencil, ChevronDown, RefreshCw, FilePlus2, Plus, ArrowRight } from "lucide-react";
+import { Clapperboard, ExternalLink, FolderOpen, Pencil, ChevronDown, RefreshCw, FilePlus2, Plus, ArrowRight, Camera } from "lucide-react";
 import { Tile, TileEmpty } from "./tile";
 import { bucketProjects, type HubProject, type HubSubitem, type ProjectsForClient } from "@/lib/monday/projects";
 import type { BriefsForClient, HubBrief, HubBriefDeliverable } from "@/lib/briefs/fetch";
 import { easternToday } from "@/lib/scope/summary";
 import { ProjectStatusPicker } from "./project-status-picker";
 import { ProjectDateEditor } from "./project-date-editor";
+import { UpdateInviteButton } from "./update-invite-button";
+import { inviteNeedsUpdate, shootAhead } from "@/lib/briefs/invite";
 
 const BRIEF_TOOL_URL = process.env.BRIEF_TOOL_URL ?? "https://briefs.surroundingsgroup.com";
 
@@ -446,7 +448,15 @@ function ProjectLine({
   // The Brief Tool's own link when we have it; the link typed on Monday otherwise.
   const briefHref = brief?.url ?? p.briefUrl;
   const revisions = brief?.revision_count ?? 0;
-  const review = briefReviewFor(p, easternToday());
+  const today = easternToday();
+  const review = briefReviewFor(p, today);
+  // Who is on the shoot: Monday's Content Shoot owner, else the brief's list.
+  const creators =
+    p.subitems?.find((s) => s.taskType === "Content Shoot")?.owner ?? brief?.creators ?? null;
+  // A shoot ahead with a calendar invite out gets "Update invite"; amber when
+  // the invite no longer matches (creators or date changed since it was sent).
+  const showInvite = Boolean(brief?.has_invite && brief && shootAhead(brief, today));
+  const inviteStale = Boolean(brief && inviteNeedsUpdate(brief));
   return (
     <div className={`flex items-start justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-secondary/60${count ? " cursor-pointer" : ""}`}>
       <div className="min-w-0 flex-1">
@@ -465,6 +475,13 @@ function ProjectLine({
             <ProjectDateEditor brandId={brandId} projectId={p.id} projectName={p.name} currentIso={p.shootDateIso} />
           </span>
           {p.am ? <span>· {p.am}</span> : null}
+          {creators && p.shootDateIso ? (
+            <span className="inline-flex items-center gap-1" title="Creators on the shoot">
+              <span aria-hidden>·</span>
+              <Camera className="h-3 w-3" />
+              {creators}
+            </span>
+          ) : null}
           {review ? <BriefReviewChip review={review} /> : null}
           {revisions > 0 ? <span>· {plural(revisions, "revision")}</span> : null}
           {p.dropboxUrl ? (
@@ -488,6 +505,11 @@ function ProjectLine({
         {briefHref ? (
           <span className="order-2 sm:order-1">
             <BriefButton href={briefHref} />
+          </span>
+        ) : null}
+        {showInvite && brief ? (
+          <span className="order-3 sm:order-first">
+            <UpdateInviteButton briefId={brief.id} emphasize={inviteStale} />
           </span>
         ) : null}
       </div>

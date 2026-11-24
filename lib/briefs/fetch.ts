@@ -25,6 +25,21 @@ export type HubBrief = {
   // The Monday All Projects item this brief belongs to.
   monday_item_id?: string | null;
   deliverables?: HubBriefDeliverable[];
+  // Shoot crew + calendar invite (added 2026-11-24): who is on the shoot,
+  // when the invite last went out, whether it no longer matches the brief,
+  // and the latest creator changes picked up from Monday.
+  creators?: string | null;
+  invite_sent_at?: string | null;
+  has_invite?: boolean;
+  invite_stale?: boolean;
+  creator_changes?: CreatorChange[];
+};
+
+export type CreatorChange = {
+  at: string;
+  from: string;
+  to: string;
+  invite: "updated" | "failed" | "not_sent";
 };
 
 // One deliverable on a brief. `revise_url` opens the Brief Tool on that
