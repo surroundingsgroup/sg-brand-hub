@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useDictation } from "@/components/dictation/use-dictation";
 import { DictationPill } from "@/components/dictation/dictation-pill";
+import { SummaryList } from "@/components/meetings/summary-list";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -214,7 +215,12 @@ export function MeetingComposer({
         toast.error(error ?? "Couldn't save.");
         return;
       }
-      toast.success("Meeting notes saved.");
+      const saved = (await res.json().catch(() => ({}))) as { todos_added?: number };
+      toast.success(
+        saved.todos_added
+          ? `Meeting notes saved. ${saved.todos_added} action item${saved.todos_added === 1 ? "" : "s"} added to To-dos.`
+          : "Meeting notes saved."
+      );
       startTransition(() => router.push(`/client/${brandId}`));
     } catch {
       toast.error("Network error — try again.");
@@ -369,15 +375,8 @@ Examples:
             <EmptyState />
           ) : (
             <>
-              <OutputCard
-                title="Summary"
-                onCopy={() => copy(analysis.summary, "Summary")}
-              >
-                <AutoTextarea
-                  value={analysis.summary}
-                  onChange={(v) => setAnalysis((a) => ({ ...a, summary: v }))}
-                  rows={4}
-                />
+              <OutputCard title="Summary">
+                <SummaryList text={analysis.summary} />
               </OutputCard>
 
               <OutputCard
@@ -399,6 +398,11 @@ Examples:
                   }
                   emptyLabel="Nothing we promised."
                 />
+                {analysis.action_items_us.length ? (
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    When you save, each goes on its owner&apos;s To-dos in My Surroundings (no owner = yours).
+                  </p>
+                ) : null}
               </OutputCard>
 
               <OutputCard
@@ -465,7 +469,7 @@ Examples:
                     onChange={(v) =>
                       setAnalysis((a) => ({ ...a, followup_email_body: v }))
                     }
-                    rows={8}
+                    rows={16}
                   />
                 </div>
               </OutputCard>

@@ -230,7 +230,7 @@ export function MeetingsTile({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-foreground">{m.meeting_title ?? m.meeting_type.replace(/_/g, " ")}</div>
-                      {m.summary ? <div className="truncate text-[11px] text-muted-foreground">{m.summary}</div> : null}
+                      {m.summary ? <div className="truncate text-[11px] text-muted-foreground">{m.summary.replace(/^[-•*]\s*/gm, "").split("\n").filter(Boolean).join(" · ")}</div> : null}
                     </div>
                     <span className="whitespace-nowrap text-[11px] text-muted-foreground">{fmtDate(m.meeting_date)}</span>
                   </a>

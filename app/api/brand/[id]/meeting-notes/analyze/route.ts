@@ -113,15 +113,15 @@ ${rawNotes}
 Turn this into structured output. Return ONLY a JSON object inside <json>...</json> tags, no commentary, with this exact shape:
 
 {
-  "summary": "3-5 sentence recap of what happened. Specific. If numbers, dates, or names came up in the raw notes, keep them.",
+  "summary": "3 to 6 bullet lines, one per topic, each starting with '- ' and separated by a newline. Lead each with the topic and a colon, then what was decided, in 20 words or fewer (e.g. '- Emails: revisions on all five, lighter copy in sequence one'). Keep numbers, dates and names from the notes. No intro line, no paragraph.",
   "action_items_us": [
     { "task": "verb-first, concrete", "owner": "SG team member if named, else null", "due": "date or relative like 'by Friday' if mentioned, else null" }
   ],
   "action_items_them": [
     { "task": "what the client needs to do", "owner": "person at the client if named, else null", "due": "date if mentioned, else null" }
   ],
-  "followup_email_subject": "Short, specific — never generic like 'Meeting follow-up'. Mention the meeting type and date.",
-  "followup_email_body": "A client-ready follow-up email body. Warm but professional. Address ${pocName} by first name. Include a quick thank-you, the top 2-3 decisions/takeaways from the meeting, the action items THEY own (not ours), and a close. Plain text, no markdown. Sign off as '${amName}' or similar.",
+  "followup_email_subject": "Ignored (the subject is set for you). Return an empty string.",
+  "followup_email_body": "A client-ready follow-up email that reads in 20 seconds. Plain text, no markdown, no bold, no em dashes. Exactly this layout, leaving out any section with nothing in it:\nHi <first name of ${pocName}>,\n\nThanks for the time today. Here is where we landed.\n\nDECIDED\n• <topic>: <decision, 15 words or fewer>\n\nWE ARE ON\n• <what SG will do> (<when, if said>)\n\nFROM YOU\n• <what the client will do> (<when, if said>)\n\nCOMING UP\n• <next meeting, deadline or milestone, with its date>\n\n<one short closing line>\n<first name of ${amName}>\n\nBullets use the • character. Each bullet is one line. No paragraphs anywhere except the one-line thank-you and the one-line close.",
   "next_meeting_focus": "One sentence: what the next sync should prioritize given what happened today."
 }
 
@@ -129,7 +129,8 @@ Rules:
 - Arrays are [] if nothing fits. Never invent action items.
 - action_items_us = things SG owes the client (shoots, edits, strategy, calendar, etc.)
 - action_items_them = things the client owes SG (approvals, assets, feedback, intros, etc.)
-- If the raw notes are thin or unclear, say so in the summary rather than padding.`;
+- If the raw notes are thin or unclear, say so in the summary rather than padding.
+- Notes may be a voice transcript with no punctuation and misheard words; read them for meaning and fix obvious mishearings (brand and model names, numbers) only when the context makes the right word clear.`;
 
   const client = new Anthropic({ apiKey: key });
 
@@ -168,7 +169,20 @@ Rules:
     );
   }
 
-  const analysis = normalize(parsed, meetingTitle);
+  // The subject is set here, short and the same shape every time:
+  // "Bertram Yachts | Monthly sync recap, Nov 24".
+  const SHORT_LABEL: Record<string, string> = {
+    monthly_external_sync: "Monthly sync",
+    internal_strategy_collab: "Strategy",
+    quarterly_business_review: "Quarterly review",
+    annual_audit: "Annual audit",
+  };
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(body.meeting_date ?? "")
+    ? new Date(`${body.meeting_date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+  const subject = `${clientName} | ${SHORT_LABEL[meetingType] ?? "Meeting"} recap, ${day}`;
+  void meetingTitle;
+  const analysis = normalize(parsed, subject);
   return NextResponse.json(analysis);
 }
 
@@ -183,7 +197,7 @@ function scrubDashes(s: string): string {
     .replace(/\s+\./g, ".");
 }
 
-function normalize(x: unknown, fallbackTitle: string): MeetingAnalysis {
+function normalize(x: unknown, shortSubject: string): MeetingAnalysis {
   const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
   const str = (v: unknown, fb = ""): string => {
     if (typeof v !== "string") return fb;
@@ -212,10 +226,15 @@ function normalize(x: unknown, fallbackTitle: string): MeetingAnalysis {
           .slice(0, 20)
       : [];
   return {
-    summary: str(o.summary, ""),
+    summary: str(o.summary, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => "- " + l.replace(/^[-•*]\s*/, ""))
+      .join("\n"),
     action_items_us: items(o.action_items_us),
     action_items_them: items(o.action_items_them),
-    followup_email_subject: str(o.followup_email_subject, fallbackTitle),
+    followup_email_subject: shortSubject,
     followup_email_body: str(o.followup_email_body, ""),
     next_meeting_focus: str(o.next_meeting_focus, ""),
   };

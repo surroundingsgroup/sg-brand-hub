@@ -3,6 +3,7 @@
 // email all render as plain cards. (Edit-in-place lands next pass.)
 
 import { notFound } from "next/navigation";
+import { SummaryList } from "@/components/meetings/summary-list";
 import Link from "next/link";
 import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -133,9 +134,7 @@ export default async function SavedMeetingPage({
           <div className="flex flex-col gap-4">
             {m.summary ? (
               <Card title="Summary">
-                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">
-                  {m.summary}
-                </p>
+                <SummaryList text={m.summary} />
               </Card>
             ) : null}
 
