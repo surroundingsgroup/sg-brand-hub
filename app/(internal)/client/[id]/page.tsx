@@ -31,6 +31,8 @@ import { SectionNav } from "@/components/client-profile/section-nav";
 import { fetchAccountManagers } from "@/lib/monday/teams";
 import { ContactTile } from "@/components/client-profile/contact-tile";
 import { NeedsYouBar } from "@/components/client-profile/needs-you-bar";
+import { OnboardingTile } from "@/components/client-profile/onboarding-tile";
+import { loadOnboardingChecklist } from "@/lib/onboarding/checklist";
 import { AllocationTile } from "@/components/client-profile/allocation-tile";
 import { boardHoursFor, fetchBoardAllocations } from "@/lib/allocations/board-hours";
 import { fetchInvoices, invoicesFor } from "@/lib/monday/invoicing";
@@ -63,7 +65,7 @@ export default async function ClientProfilePage({
     supabase.from("brands").select("*").eq("id", params.id).single(),
     supabase
       .from("brand_logos")
-      .select("id")
+      .select("id, logo_type")
       .eq("brand_id", params.id),
   ]);
 
@@ -203,6 +205,27 @@ export default async function ClientProfilePage({
   // column lands.
   const scope = ((b as unknown as { scope?: BrandScope | null }).scope ?? null) as BrandScope | null;
 
+  // New-client onboarding checklist: shown while anything is still to do, and
+  // for the first 30 days even when everything is done.
+  const socialdeskUrl = pulseData.client_id
+    ? `${process.env.SOCIALDESK_URL ?? "https://socialdesk-lac.vercel.app"}/#/client/${pulseData.client_id}`
+    : null;
+  const onboarding = await loadOnboardingChecklist({
+    supabase,
+    brand: b,
+    imageLogoCount: ((logos ?? []) as { logo_type?: string | null }[]).filter((l) => l.logo_type !== "reference").length,
+    clientBoardId: clientBoardData.boardId
+      ? String(clientBoardData.boardId)
+      : ((b as unknown as { monday_board_id?: string | null }).monday_board_id ?? null),
+    socialdeskUrl,
+    scopeChannels: (() => {
+      const ch = (scope as unknown as { channels?: unknown } | null)?.channels;
+      return Array.isArray(ch) ? ch.length : ch && typeof ch === "object" ? Object.keys(ch).length : 0;
+    })(),
+  });
+  const brandAgeDays = (Date.now() - new Date((b as unknown as { created_at?: string }).created_at ?? 0).getTime()) / 86_400_000;
+  const showOnboarding = onboarding.done < onboarding.total || brandAgeDays <= 30;
+
   // Scope tile inputs, straight from the Monday 🚦 All Projects board:
   // Client + Project Type + Shoot Date. Each dated project is classified by
   // its Project Type (Professional Content Shoot = a contracted shoot; Micro
@@ -296,6 +319,9 @@ export default async function ClientProfilePage({
           to actually write. */}
       <SectionNav />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
+        {/* Onboarding — is everything set up for this client? (full width) */}
+        {showOnboarding ? <OnboardingTile brandId={b.id} checklist={onboarding} /> : null}
+
         {/* Row 1 — who, and when we talk */}
         <ContactTile brand={b} />
         <MeetingsTile brandId={b.id} pastMeetings={pastMeetings} calendar={calendarMeetings} />
