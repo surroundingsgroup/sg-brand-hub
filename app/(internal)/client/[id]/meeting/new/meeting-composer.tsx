@@ -12,7 +12,7 @@
 // can iterate on raw notes freely. "Save" persists to meeting_notes
 // and bounces back to the client profile.
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -23,7 +23,12 @@ import {
   Check,
   ListChecks,
   Users,
+  Mic,
+  AudioLines,
+  Square,
 } from "lucide-react";
+import { useDictation } from "@/components/dictation/use-dictation";
+import { DictationPill } from "@/components/dictation/dictation-pill";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,6 +85,64 @@ export function MeetingComposer({
 
   const [meetingDate, setMeetingDate] = useState<string>(today());
   const [rawNotes, setRawNotes] = useState("");
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const modeRef = useRef<"dictate" | "meeting" | null>(null);
+
+  // Voice: dictation drops words at the cursor; a meeting recording puts each
+  // spoken phrase on its own line, ready for Analyze to turn into notes.
+  const insertSpoken = useCallback((text: string) => {
+    const el = notesRef.current;
+    setRawNotes((cur) => {
+      if (modeRef.current === "meeting") return `${cur}${cur && !cur.endsWith("\n") ? "\n" : ""}${text}\n`;
+      const focused = el && document.activeElement === el;
+      const at = focused ? el.selectionEnd ?? cur.length : cur.length;
+      const before = cur.slice(0, at);
+      const after = cur.slice(at);
+      const sep = before && !/\s$/.test(before) ? " " : "";
+      const next = `${before}${sep}${text}${after && !/^\s/.test(after) ? " " : ""}${after}`;
+      if (focused) {
+        const caret = (before + sep + text).length;
+        requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+      }
+      return next;
+    });
+  }, []);
+  const voice = useDictation(insertSpoken);
+  const { start: startVoice, stop: stopVoice } = voice;
+
+  function toggleVoice(mode: "dictate" | "meeting") {
+    if (voice.active) {
+      stopVoice();
+      modeRef.current = null;
+      return;
+    }
+    modeRef.current = mode;
+    if (mode === "meeting") {
+      const at = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      setRawNotes((cur) => `${cur}${cur.trim() ? "\n\n" : ""}Meeting recording, ${at}\n`);
+    }
+    startVoice(mode);
+  }
+
+  // ⌘D / Ctrl+D starts and stops dictation on this page.
+  const toggleRef = useRef(toggleVoice);
+  toggleRef.current = toggleVoice;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        toggleRef.current("dictate");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    if (voice.error) {
+      toast.error(voice.error);
+      voice.clearError();
+    }
+  }, [voice]);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis>(EMPTY);
@@ -214,11 +277,45 @@ export function MeetingComposer({
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Raw notes
             </h2>
-            <span className="text-[10px] text-muted-foreground">
-              {rawNotes.length.toLocaleString()} chars
+            <span className="flex items-center gap-2">
+              {voice.supported ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => toggleVoice("dictate")}
+                    title="Talk and your words go where the cursor is. ⌘D starts and stops."
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      voice.active === "dictate"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-foreground/80 hover:border-foreground/50"
+                    }`}
+                  >
+                    {voice.active === "dictate" ? <Square className="h-3 w-3 fill-current" /> : <Mic className="h-3 w-3" />}
+                    {voice.active === "dictate" ? "Stop" : "Dictate"}
+                    <kbd className="ml-0.5 text-[10px] opacity-60">⌘D</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleVoice("meeting")}
+                    title="Leave it running during the meeting. Everything said near your mic is written down, one line per phrase; then hit Analyze."
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      voice.active === "meeting"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-foreground/80 hover:border-foreground/50"
+                    }`}
+                  >
+                    {voice.active === "meeting" ? <Square className="h-3 w-3 fill-current" /> : <AudioLines className="h-3 w-3" />}
+                    {voice.active === "meeting" ? "Stop recording" : "Record meeting"}
+                  </button>
+                </>
+              ) : null}
+              <span className="text-[10px] text-muted-foreground">
+                {rawNotes.length.toLocaleString()} chars
+              </span>
             </span>
           </div>
           <Textarea
+            ref={notesRef}
             value={rawNotes}
             onChange={(e) => setRawNotes(e.target.value)}
             placeholder={`Dump everything. Talking points, decisions, promises, random stuff that came up. Bullets, paragraphs, half-sentences — doesn't matter, the AI will clean it up.
@@ -387,6 +484,9 @@ Examples:
           )}
         </div>
       </div>
+      {voice.active ? (
+        <DictationPill mode={voice.active} level={voice.level} interim={voice.interim} startedAt={voice.startedAt} onStop={() => toggleVoice(voice.active!)} />
+      ) : null}
     </div>
   );
 }
