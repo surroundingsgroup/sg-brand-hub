@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 // The follow-up email as it will read: greeting, opener, a bold heading per
 // project with bullets (sub-bullets and **bold** phrases inside), closing,
 // sign-off. Parsed from the plain-text body (so hand edits show up), and
@@ -166,6 +168,121 @@ export function emailHtml(body: string): string {
     return `<p style="${text}margin:0 0 12px;">${richHtml(b.text)}</p>`;
   });
   return `<div>${parts.join("")}</div>`;
+}
+
+/** Markup for the click-to-edit view: same structure as emailHtml, styled by
+ *  the editor's classes (so it follows light/dark), with headings marked. */
+function editorHtml(body: string): string {
+  return parseEmail(body)
+    .map((b) => {
+      if (b.kind === "label") return `<div data-label="1">${esc(b.text)}</div>`;
+      if (b.kind === "heading") return `<div data-h="1">${esc(b.text)}</div>`;
+      if (b.kind === "list")
+        return `<ul>${b.items
+          .map((it) => `<li>${richHtml(it.text)}${it.sub.length ? `<ul>${it.sub.map((x) => `<li>${richHtml(x)}</li>`).join("")}</ul>` : ""}</li>`)
+          .join("")}</ul>`;
+      return `<p>${richHtml(b.text)}</p>`;
+    })
+    .join("");
+}
+
+// What the person typed, back to the plain-text shape above.
+function inlineOf(node: Node): string {
+  let out = "";
+  node.childNodes.forEach((c) => {
+    if (c.nodeType === Node.TEXT_NODE) {
+      out += (c.textContent ?? "").replace(/\u00a0/g, " ");
+      return;
+    }
+    if (c.nodeType !== Node.ELEMENT_NODE) return;
+    const el = c as HTMLElement;
+    const tag = el.tagName;
+    if (tag === "UL" || tag === "OL") return;
+    if (tag === "BR") {
+      out += " ";
+      return;
+    }
+    const inner = inlineOf(el);
+    const bold = tag === "B" || tag === "STRONG" || /^(bold|[6-9]00)$/.test(el.style.fontWeight);
+    if (bold && inner.trim()) {
+      const lead = inner.match(/^\s*/)?.[0] ?? "";
+      const trail = inner.match(/\s*$/)?.[0] ?? "";
+      out += `${lead}**${inner.trim()}**${trail}`;
+    } else out += inner;
+  });
+  return out.replace(/\*\*\s*\*\*/g, "");
+}
+
+function listLines(list: HTMLElement, depth: number): string[] {
+  const lines: string[] = [];
+  list.childNodes.forEach((c) => {
+    if (!(c instanceof HTMLElement)) return;
+    if (c.tagName === "LI") {
+      const text = inlineOf(c).replace(/\s+/g, " ").trim();
+      if (text) lines.push(`${depth ? "  ◦ " : "• "}${text}`);
+      c.querySelectorAll(":scope > ul, :scope > ol").forEach((sub) => lines.push(...listLines(sub as HTMLElement, depth + 1)));
+    } else if (c.tagName === "UL" || c.tagName === "OL") lines.push(...listLines(c, depth + 1));
+  });
+  return lines;
+}
+
+export function domToPlain(root: HTMLElement): string {
+  const blocks: string[] = [];
+  const walk = (parent: Node) => {
+    parent.childNodes.forEach((c) => {
+      if (c.nodeType === Node.TEXT_NODE) {
+        const t = (c.textContent ?? "").replace(/\u00a0/g, " ").trim();
+        if (t) blocks.push(t);
+        return;
+      }
+      if (!(c instanceof HTMLElement)) return;
+      if (c.tagName === "UL" || c.tagName === "OL") {
+        const lines = listLines(c, 0);
+        if (lines.length) blocks.push(lines.join("\n"));
+        return;
+      }
+      if (c.querySelector("ul, ol, p, div")) {
+        walk(c);
+        return;
+      }
+      const t = inlineOf(c).replace(/\s+/g, " ").trim();
+      if (!t) return;
+      if (c.dataset.label) blocks.push(t.replace(/\*\*/g, "").toUpperCase());
+      else if (c.dataset.h) blocks.push(t.replace(/\*\*/g, ""));
+      else blocks.push(t);
+    });
+  };
+  walk(root);
+  // A heading sits right on top of its bullets.
+  return blocks
+    .map((b, i) => (i > 0 && /^[•◦]/.test(b) && !/^[•◦]/.test(blocks[i - 1]) && root.querySelector("[data-h]") ? `\u0000${b}` : b))
+    .join("\n\n")
+    .replace(/\n\n\u0000/g, "\n");
+}
+
+/** The email, editable in place: real bold and bullets, no markup to see. */
+export function EmailEditor({ body, onChange }: { body: string; onChange: (next: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const last = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ref.current || body === last.current) return;
+    ref.current.innerHTML = editorHtml(body);
+    last.current = body;
+  }, [body]);
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      spellCheck
+      onInput={(e) => {
+        const next = domToPlain(e.currentTarget);
+        last.current = next;
+        onChange(next);
+      }}
+      className="cursor-text rounded-xl border border-border/70 bg-background px-5 py-5 text-[13.5px] leading-relaxed text-foreground/90 outline-none transition-colors hover:border-foreground/25 focus:border-foreground/40 [&_[data-h]]:mb-1.5 [&_[data-h]]:mt-5 [&_[data-h]]:text-[14.5px] [&_[data-h]]:font-semibold [&_[data-h]]:text-foreground [&_[data-label]]:mb-1.5 [&_[data-label]]:mt-5 [&_[data-label]]:text-[10.5px] [&_[data-label]]:font-semibold [&_[data-label]]:uppercase [&_[data-label]]:tracking-[0.16em] [&_[data-label]]:text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground [&_li]:mb-1 [&_p+p]:mt-3 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_strong]:font-semibold [&_strong]:text-foreground [&_ul]:mb-2 [&_ul]:ml-5 [&_ul]:list-disc [&_ul_ul]:mt-1 [&_ul_ul]:list-[circle]"
+    />
+  );
 }
 
 /** The body as plain text for mail apps that drop formatting (no ** marks). */

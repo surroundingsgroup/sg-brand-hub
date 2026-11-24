@@ -32,7 +32,7 @@ import {
 import { useDictation } from "@/components/dictation/use-dictation";
 import { DictationPill } from "@/components/dictation/dictation-pill";
 import { SummaryList } from "@/components/meetings/summary-list";
-import { EmailPreview, copyEmail } from "@/components/meetings/email-preview";
+import { EmailEditor, copyEmail } from "@/components/meetings/email-preview";
 import { OpenInGmail } from "@/components/meetings/open-in-gmail";
 import { ActionTool, type ActionToolItem } from "@/components/meetings/action-tool";
 import { RecapHero } from "@/components/meetings/recap-hero";
@@ -105,7 +105,6 @@ export function MeetingComposer({
 
   const [meetingDate, setMeetingDate] = useState<string>(today());
   const [rawNotes, setRawNotes] = useState("");
-  const [editingEmail, setEditingEmail] = useState(false);
   const [cc, setCc] = useState<string[]>([]);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const modeRef = useRef<"dictate" | "meeting" | null>(null);
@@ -559,25 +558,12 @@ Examples:
                         </span>
                       ) : null}
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setEditingEmail((e) => !e)}
-                      className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {editingEmail ? "Done editing" : "Edit"}
-                    </button>
+                    <span className="text-[10.5px] text-muted-foreground/70">Click to edit · ⌘B bold</span>
                   </div>
-                  {editingEmail ? (
-                    <AutoTextarea
-                      value={analysis.followup_email_body}
-                      onChange={(v) =>
-                        setAnalysis((a) => ({ ...a, followup_email_body: v }))
-                      }
-                      rows={18}
-                    />
-                  ) : (
-                    <EmailPreview body={analysis.followup_email_body} />
-                  )}
+                  <EmailEditor
+                    body={analysis.followup_email_body}
+                    onChange={(v) => setAnalysis((a) => ({ ...a, followup_email_body: v }))}
+                  />
                 </div>
               </OutputCard>
 
@@ -698,25 +684,6 @@ function OutputCard({
       </header>
       {children}
     </section>
-  );
-}
-
-function AutoTextarea({
-  value,
-  onChange,
-  rows,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  rows: number;
-}) {
-  return (
-    <Textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      rows={rows}
-      className="resize-y bg-background text-[13px] leading-relaxed"
-    />
   );
 }
 
