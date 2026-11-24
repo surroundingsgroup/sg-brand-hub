@@ -13,6 +13,7 @@ import { ArrowLeft, ArrowUpRight, Loader2, Paperclip, Pin, Plus, Search, Send, X
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ChatConversation, ChatMessage, ChatPerson } from "@/lib/chat/client";
 import { cn } from "@/lib/utils";
+import { htmlToChatText } from "@/lib/chat/paste";
 
 const LIST_EVERY = 60_000;
 const THREAD_EVERY = 12_000;
@@ -102,6 +103,15 @@ export function ChatWidget({ initial }: { initial: ChatConversation[] }) {
   const [startError, setStartError] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  // The message box grows with what is in it (up to ~12 lines, then scrolls),
+  // so a pasted list can be read before it is sent.
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 256)}px`;
+  }, [text]);
   const bottom = useRef<HTMLDivElement>(null);
   const activeRef = useRef<string | null>(null);
   activeRef.current = active;
@@ -562,6 +572,7 @@ export function ChatWidget({ initial }: { initial: ChatConversation[] }) {
                 <Paperclip className="h-4 w-4" />
               </button>
               <textarea
+                ref={boxRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => {
@@ -576,12 +587,28 @@ export function ChatWidget({ initial }: { initial: ChatConversation[] }) {
                   if (pasted.length) {
                     e.preventDefault();
                     attach(pasted);
+                    return;
+                  }
+                  // Formatted text: keep its numbered lists, bullets and line
+                  // breaks (the browser's plain copy drops them).
+                  const html = e.clipboardData?.getData("text/html");
+                  const clean = html ? htmlToChatText(html) : null;
+                  if (clean) {
+                    e.preventDefault();
+                    const el = e.currentTarget;
+                    const start = el.selectionStart ?? text.length;
+                    const end = el.selectionEnd ?? text.length;
+                    const next = (text.slice(0, start) + clean + text.slice(end)).slice(0, 4000);
+                    setText(next);
+                    const caret = Math.min(start + clean.length, next.length);
+                    requestAnimationFrame(() => el.setSelectionRange(caret, caret));
                   }
                 }}
                 rows={1}
                 maxLength={4000}
                 placeholder={`Message ${current.title}`}
-                className="max-h-28 min-h-[38px] w-full resize-none rounded-lg border border-border bg-panel px-3 py-2 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-foreground/50"
+                title="Enter sends. Shift+Enter adds a new line."
+                className="max-h-64 min-h-[38px] w-full resize-none rounded-lg border border-border bg-panel px-3 py-2 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-foreground/50"
               />
               <button
                 type="submit"
