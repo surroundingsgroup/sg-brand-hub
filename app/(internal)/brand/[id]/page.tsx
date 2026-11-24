@@ -159,7 +159,7 @@ export default async function BrandDetailPage({
 
         <TabsContent value="overview">
           <div className="panel divide-y divide-border px-6">
-            <FormSection label="Submitter" description="Who filled out the intake form.">
+            <FormSection label="Client contact" description="The client's main contact. When the client fills out the intake themselves, this is them.">
               <FieldGrid>
                 <EditableField label="Name" field="submitter_name" initialValue={b.submitter_name ?? ""} brandId={b.id} onSave={updateBrand} />
                 <EditableField label="Email" field="submitter_email" initialValue={b.submitter_email ?? ""} brandId={b.id} onSave={updateBrand} />
