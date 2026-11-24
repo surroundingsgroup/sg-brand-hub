@@ -144,7 +144,7 @@ Turn this into structured output. Return ONLY a JSON object inside <json>...</js
       "tool": "one of: edit_request (editing existing photos or video, retouching, cutting), project_request (a new design, graphic, email build or production to make), revision_request (design changes to delivered work that has a brief in the list below: layout, copy, CTA, footer), social_task (social media posts and content updates the SMM handles, including swapping a model name, number or images across content while keeping the rest), meeting (a meeting to set up), todo (anything else)",
       "brief_id": "for revision_request: the id from the client's briefs list below that this is about, else null",
       "links": ["every URL from the notes that this item needs (e.g. a Milanote board for a design build)"],
-      "request": { "project_name": "for edit_request / project_request: a clear project name, e.g. 'Email sequence two build'", "project_type": "one of: Edit Request, Professional Content Shoot, Micro Content Shoot, Standard Listing, Custom / Other", "context": "for edit_request / project_request: 1 to 3 sentences for the editor or designer: what to make, from what, and any detail from the notes" },
+      "request": { "project_name": "for edit_request / project_request: a clear project name, e.g. 'Email sequence two build'", "project_type": "Edit Request for anything made in post (video or photo edits, graphics, email designs and builds); a shoot type (Professional Content Shoot, Micro Content Shoot, Standard Listing) only for a new shoot; Custom / Other otherwise", "date": "YYYY-MM-DD when the due date is clear from the notes, else null", "context": "for edit_request / project_request: 1 to 3 sentences for the editor or designer: what to make, from what, and any detail from the notes" },
       "meeting": { "title": "for meeting: e.g. '2027 renewal meeting'", "from": "YYYY-MM-DD first day it could be (resolve phrases like 'second week of December' against the meeting date)", "to": "YYYY-MM-DD last day", "minutes": 60, "with_client": true }
     }
   ],
@@ -272,6 +272,7 @@ Rules:
         context: String(req.context || it.task).slice(0, 1500),
         from: "meeting",
       });
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(req.date ?? ""))) q.set("date", String(req.date));
       for (const l of links) q.append("link", l);
       out.request_url = `${briefTool}/request?${q.toString()}`;
     }
