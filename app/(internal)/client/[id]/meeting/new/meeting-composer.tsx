@@ -47,7 +47,7 @@ type ActionItem = ActionToolItem & {
   due?: string | null;
 };
 
-type Analysis = {
+export type Analysis = {
   summary: string;
   action_items_us: ActionItem[];
   action_items_them: ActionItem[];
@@ -90,8 +90,11 @@ export function MeetingComposer({
   pocEmail,
   amName,
   teamNames = [],
+  existing,
 }: {
   teamNames?: string[];
+  /** Editing a saved meeting: start from it and save back to it. */
+  existing?: { id: string; meeting_date: string; raw_notes: string; analysis: Partial<Analysis> };
   brandId: string;
   brandName: string;
   meetingType: string;
@@ -103,8 +106,8 @@ export function MeetingComposer({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [meetingDate, setMeetingDate] = useState<string>(today());
-  const [rawNotes, setRawNotes] = useState("");
+  const [meetingDate, setMeetingDate] = useState<string>(existing?.meeting_date || today());
+  const [rawNotes, setRawNotes] = useState(existing?.raw_notes ?? "");
   const [cc, setCc] = useState<string[]>([]);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const modeRef = useRef<"dictate" | "meeting" | null>(null);
@@ -166,12 +169,12 @@ export function MeetingComposer({
   }, [voice]);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis>(EMPTY);
-  const [analyzed, setAnalyzed] = useState(false);
+  const [analysis, setAnalysis] = useState<Analysis>(existing ? { ...EMPTY, ...existing.analysis } : EMPTY);
+  const [analyzed, setAnalyzed] = useState(!!existing);
 
   // Keep a draft on this device so a refresh or a closed tab mid-meeting
   // never loses the dump. Cleared on Save.
-  const draftKey = `sg-meeting-draft:${brandId}:${meetingType}`;
+  const draftKey = `sg-meeting-draft:${brandId}:${existing ? `edit-${existing.id}` : meetingType}`;
   const restored = useRef(false);
   useEffect(() => {
     try {
@@ -199,7 +202,12 @@ export function MeetingComposer({
     if (!restored.current) return;
     const t = setTimeout(() => {
       try {
-        if (!rawNotes.trim()) window.localStorage.removeItem(draftKey);
+        // Editing a saved meeting: only keep a draft once something changed.
+        const untouched =
+          existing &&
+          rawNotes === existing.raw_notes &&
+          JSON.stringify(analysis) === JSON.stringify({ ...EMPTY, ...existing.analysis });
+        if (!rawNotes.trim() || untouched) window.localStorage.removeItem(draftKey);
         else
           window.localStorage.setItem(
             draftKey,
@@ -208,6 +216,7 @@ export function MeetingComposer({
       } catch {}
     }, 400);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawNotes, meetingDate, analysis, analyzed, draftKey]);
 
   async function analyze() {
@@ -257,8 +266,8 @@ export function MeetingComposer({
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/brand/${brandId}/meeting-notes`, {
-        method: "POST",
+      const res = await fetch(existing ? `/api/brand/${brandId}/meeting-notes/${existing.id}` : `/api/brand/${brandId}/meeting-notes`, {
+        method: existing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           meeting_type: meetingType,
@@ -280,12 +289,13 @@ export function MeetingComposer({
       try {
         window.localStorage.removeItem(draftKey);
       } catch {}
+      const what = existing ? "Changes saved." : "Meeting notes saved.";
       toast.success(
         saved.todos_added
-          ? `Meeting notes saved. ${saved.todos_added} action item${saved.todos_added === 1 ? "" : "s"} added to To-dos.`
-          : "Meeting notes saved."
+          ? `${what} ${saved.todos_added} action item${saved.todos_added === 1 ? "" : "s"} added to To-dos.`
+          : what
       );
-      startTransition(() => router.push(`/client/${brandId}`));
+      startTransition(() => router.push(existing ? `/client/${brandId}/meeting/${existing.id}` : `/client/${brandId}`));
     } catch {
       toast.error("Network error — try again.");
     } finally {
@@ -423,7 +433,7 @@ Examples:
                 ) : (
                   <Check className="h-3.5 w-3.5" />
                 )}
-                {saving ? "Saving…" : "Save meeting"}
+                {saving ? "Saving…" : existing ? "Save changes" : "Save meeting"}
               </Button>
             ) : null}
             <span className="text-[11px] text-muted-foreground">

@@ -73,6 +73,11 @@ function CalendarLine({ m, label }: { m: ClientMeeting; label?: string }) {
       {label ? <span className="w-9 flex-shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</span> : null}
       <span className="flex-shrink-0 font-medium text-foreground">{fmtWhen(m.start)}</span>
       <span className="min-w-0 truncate text-muted-foreground">{m.title}</span>
+      {m.with_client === false ? (
+        <span className="flex-shrink-0 rounded-full border border-border px-1.5 text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground/80">
+          Internal
+        </span>
+      ) : null}
     </>
   );
   const cls = "flex items-baseline gap-2 text-[12px]";
@@ -140,10 +145,15 @@ export function MeetingsTile({
   // Meetings with this client on the team's Google Calendars.
   calendar?: ClientMeetings;
 }) {
-  const next = calendar?.ok ? (calendar.upcoming[0] ?? null) : null;
-  const lastMet = calendar?.ok ? (calendar.recent[0] ?? null) : null;
+  // Next and last favor meetings the client is actually on; internal prep
+  // meetings named for them only stand in when there is nothing else.
+  const pick = (list: ClientMeeting[]) => list.find((m) => m.with_client !== false) ?? list[0] ?? null;
+  const next = calendar?.ok ? pick(calendar.upcoming) : null;
+  const lastMet = calendar?.ok ? pick(calendar.recent) : null;
   // The next and the last meeting stay in view; anything further is a tap away.
-  const moreOnCalendar = calendar?.ok ? [...calendar.upcoming.slice(1), ...calendar.recent.slice(1)] : [];
+  const moreOnCalendar = calendar?.ok
+    ? [...calendar.upcoming, ...calendar.recent].filter((m) => m !== next && m !== lastMet).slice(0, 6)
+    : [];
   // Kept short so the card sits level with Contact beside it: the two
   // monthly meetings are always there, and the less frequent ones and the
   // past notes open with a tap.

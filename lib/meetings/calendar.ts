@@ -13,6 +13,8 @@ export type ClientMeeting = {
   start: string; // ISO instant
   end: string | null;
   url: string | null;
+  /** Someone from the client is on the invite; false = an internal prep meeting. */
+  with_client?: boolean;
 };
 
 export type ClientMeetings = {

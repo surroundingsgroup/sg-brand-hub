@@ -1,13 +1,15 @@
-// Saved meeting view — opened from the Meetings tile's "Recent notes"
-// strip. Read-only for now; the raw dump, AI output, and follow-up
-// email all render as plain cards. (Edit-in-place lands next pass.)
+// Saved meeting view, opened from the Meetings tile. Reads like the composer
+// did: the recap card, our numbered next steps with their tools (requests,
+// revisions, open times, links), the client's side and the follow-up email.
+// Edit opens the composer on this meeting.
 
 import { notFound } from "next/navigation";
-import { SummaryList } from "@/components/meetings/summary-list";
 import { EmailPreview } from "@/components/meetings/email-preview";
 import { OpenInGmail } from "@/components/meetings/open-in-gmail";
+import { RecapHero } from "@/components/meetings/recap-hero";
+import { ActionTool, type ActionToolItem } from "@/components/meetings/action-tool";
 import Link from "next/link";
-import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar } from "lucide-react";
+import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar, PenLine, UserRound, CalendarClock } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +22,16 @@ const MEETING_LABEL: Record<string, string> = {
   other: "Client Meeting",
 };
 
-type ActionItem = {
-  task: string;
+type ActionItem = ActionToolItem & {
   owner?: string | null;
   due?: string | null;
 };
+
+// "2026-11-25" -> "Wed, Nov 25"; loose wording stays as written.
+function dueLabel(due: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return due;
+  return new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
 
 function fmtDate(iso: string): string {
   const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
@@ -105,11 +112,18 @@ export default async function SavedMeetingPage({
           <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground md:text-[2.25rem]">
             {brand.business_name}
           </h1>
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-5 text-[12px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
               {fmtDate(m.meeting_date)}
             </span>
+            <Link
+              href={`/client/${params.id}/meeting/${m.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-semibold text-background shadow-sm transition-opacity hover:opacity-90"
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              Edit notes
+            </Link>
           </div>
         </div>
 
@@ -130,18 +144,24 @@ export default async function SavedMeetingPage({
           </section>
 
           <div className="flex flex-col gap-4">
-            {m.summary ? (
-              <Card title="Summary">
-                <SummaryList text={m.summary} />
-              </Card>
+            {m.summary || m.next_meeting_focus ? (
+              <RecapHero summary={m.summary ?? ""} focus={m.next_meeting_focus ?? ""} clientName={brand.business_name as string} />
             ) : null}
 
-            <Card title="Action items — us" icon={<ListChecks className="h-3.5 w-3.5" />}>
-              <ActionList items={m.action_items_us ?? []} emptyLabel="Nothing we promised." />
+            <Card
+              title={`Our next steps${(m.action_items_us ?? []).length ? ` · ${(m.action_items_us ?? []).length}` : ""}`}
+              icon={<ListChecks className="h-3.5 w-3.5" />}
+            >
+              <ActionList
+                items={m.action_items_us ?? []}
+                emptyLabel="Nothing we promised."
+                numbered
+                tool={{ brandId: params.id, brandName: brand.business_name as string, pocEmail }}
+              />
             </Card>
 
             <Card
-              title="Action items — client"
+              title={`On ${brand.submitter_name ? possessive(String(brand.submitter_name).split(" ")[0]) : "the client's"} side`}
               icon={<UsersIcon className="h-3.5 w-3.5" />}
             >
               <ActionList
@@ -174,16 +194,6 @@ export default async function SavedMeetingPage({
               </Card>
             ) : null}
 
-            {m.next_meeting_focus ? (
-              <div className="rounded-xl border border-border/70 bg-panel p-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Next meeting focus
-                </div>
-                <p className="mt-1.5 text-[13px] text-foreground/90">
-                  {m.next_meeting_focus}
-                </p>
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
@@ -216,33 +226,64 @@ function Card({
   );
 }
 
+// "Bertram Yachts'" not "Bertram Yachts's".
+function possessive(name: string): string {
+  return /s$/i.test(name.trim()) ? `${name.trim()}'` : `${name.trim()}'s`;
+}
+
 function ActionList({
   items,
   emptyLabel,
+  numbered = false,
+  tool,
 }: {
   items: ActionItem[];
   emptyLabel: string;
+  numbered?: boolean;
+  /** Show each item's next-step tool (ours). */
+  tool?: { brandId: string; brandName: string; pocEmail: string | null };
 }) {
   if (!items || items.length === 0) {
     return <p className="text-[12px] italic text-muted-foreground">{emptyLabel}</p>;
   }
+  const now = new Date().toISOString();
   return (
     <ul className="space-y-2.5">
-      {items.map((it, i) => (
-        <li key={i} className="flex items-start gap-2.5 border-b border-border/40 pb-2.5 last:border-b-0 last:pb-0">
-          <div className="pt-0.5 text-muted-foreground">•</div>
-          <div className="flex-1">
-            <div className="text-[13px] leading-snug text-foreground">{it.task}</div>
-            {(it.owner || it.due) ? (
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                {it.owner ? <span>{it.owner}</span> : null}
-                {it.owner && it.due ? <span className="text-foreground/20">·</span> : null}
-                {it.due ? <span>{it.due}</span> : null}
+      {items.map((it, i) => {
+        // Proposed times that have already passed are no use any more.
+        const item: ActionItem = it.slots ? { ...it, slots: it.slots.filter((s) => s.start > now) } : it;
+        return (
+          <li key={i} className="flex items-start gap-2.5 border-b border-border/40 pb-2.5 last:border-b-0 last:pb-0">
+            {numbered ? (
+              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-foreground text-[10.5px] font-semibold text-background">
+                {i + 1}
               </div>
-            ) : null}
-          </div>
-        </li>
-      ))}
+            ) : (
+              <div className="pt-0.5 text-muted-foreground">•</div>
+            )}
+            <div className="flex-1 space-y-1.5">
+              <div className={`leading-snug text-foreground ${numbered ? "text-[13.5px] font-medium" : "text-[13px]"}`}>{it.task}</div>
+              {it.owner || it.due ? (
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  {it.owner ? (
+                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-foreground/80">
+                      <UserRound className="h-3 w-3" />
+                      {it.owner}
+                    </span>
+                  ) : null}
+                  {it.due ? (
+                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-foreground/80">
+                      <CalendarClock className="h-3 w-3" />
+                      {dueLabel(it.due)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              {tool ? <ActionTool item={item} brandId={tool.brandId} brandName={tool.brandName} pocEmail={tool.pocEmail} /> : null}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
