@@ -62,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     try {
       if (action === "done" || action === "undone") await setItemTodosDone(client, task, action === "done");
       else if (action === "clear") await deleteItemTodos(client, task);
-      else if (action === "restore") await addActionItemsToTodos(params.id, [{ ...body?.item, task }], auth.user.email ?? null);
+      else if (action === "restore") await addActionItemsToTodos(params.id, [{ ...body?.item, task }], auth.user.email ?? null, params.meetingId);
     } catch (e) {
       console.error("[meeting-notes.items] todo sync failed:", (e as Error).message);
     }

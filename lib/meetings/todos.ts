@@ -3,6 +3,7 @@
 // not on the team) goes to whoever saved the meeting. Used when a meeting is
 // saved, and again when it's edited (with only the new or reworded items).
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { insertTodos, type NewTodo } from "@/lib/todos/client-todos";
 
 // "2026-11-25" -> "Nov 25"; anything else as written.
 function dueLabel(due: string): string {
@@ -10,7 +11,7 @@ function dueLabel(due: string): string {
   return new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export async function addActionItemsToTodos(brandId: string, items: unknown[], saverEmail: string | null): Promise<number> {
+export async function addActionItemsToTodos(brandId: string, items: unknown[], saverEmail: string | null, meetingId?: string): Promise<number> {
   const list = (items as { task?: unknown; owner?: unknown; due?: unknown }[]).filter((i) => typeof i?.task === "string" && i.task.trim());
   if (!list.length) return 0;
   const admin = createSupabaseAdminClient();
@@ -32,11 +33,16 @@ export async function addActionItemsToTodos(brandId: string, items: unknown[], s
   const rows = list
     .map((i) => {
       const owner_email = emailFor(i.owner);
-      const due = typeof i.due === "string" && i.due.trim() ? ` (${dueLabel(i.due.trim())})` : "";
+      const rawDue = typeof i.due === "string" ? i.due.trim() : "";
+      const isoDue = /^\d{4}-\d{2}-\d{2}$/.test(rawDue) ? rawDue : null;
+      // A real date goes in the due column (shown as a chip); loose wording stays in the text.
+      const due = rawDue && !isoDue ? ` (${dueLabel(rawDue)})` : "";
       const text = `${client}: ${String(i.task).trim()}${due}`.slice(0, 300);
-      return owner_email ? { owner_email: owner_email.toLowerCase(), text } : null;
+      return owner_email
+        ? ({ owner_email: owner_email.toLowerCase(), text, brand_id: brandId, due_date: isoDue, source: "meeting", source_ref: meetingId ?? null } as NewTodo)
+        : null;
     })
-    .filter((r): r is { owner_email: string; text: string } => r !== null);
+    .filter((r): r is NewTodo => r !== null);
   if (!rows.length) return 0;
 
   // Saving the same meeting twice must not double anyone's list.
@@ -48,9 +54,8 @@ export async function addActionItemsToTodos(brandId: string, items: unknown[], s
   const have = new Set(((open ?? []) as { owner_email: string; text: string }[]).map((t) => `${t.owner_email.toLowerCase()}|${t.text}`));
   const fresh = rows.filter((r) => !have.has(`${r.owner_email}|${r.text}`));
   if (!fresh.length) return 0;
-  const { error } = await admin.from("my_todos").insert(fresh);
-  if (error) throw new Error(error.message);
-  return fresh.length;
+  const { count } = await insertTodos(fresh);
+  return count;
 }
 
 // ── Keeping a meeting's action items and their To-dos in step ──────────────

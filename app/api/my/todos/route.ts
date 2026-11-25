@@ -6,10 +6,11 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isEmailAllowed } from "@/lib/auth/domain";
+import { ensureRecurringForPerson, missingColumn } from "@/lib/todos/client-todos";
 
 export const dynamic = "force-dynamic";
 
-export type Todo = { id: string; text: string; done: boolean; done_at: string | null; created_at: string };
+export type Todo = { id: string; text: string; done: boolean; done_at: string | null; created_at: string; due_date?: string | null; brand_id?: string | null; source?: string | null };
 
 // The table is added by a one-time setup step; until then the card says so.
 const missingTable = (e: { code?: string; message?: string } | null) =>
@@ -27,19 +28,25 @@ async function who() {
 export async function GET() {
   const { supabase, email } = await who();
   if (!email) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  // The month's recurring client to-dos (calendar to the client, the report)
+  // for the clients this person runs, so they show up here on their own.
+  await ensureRecurringForPerson(email).catch(() => undefined);
   // Open items, plus what was ticked off in the last day so a slip can be undone.
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("my_todos")
-    .select("id, text, done, done_at, created_at")
-    .eq("owner_email", email)
-    .or(`done.eq.false,done_at.gte.${since}`)
-    .order("done", { ascending: true })
-    .order("created_at", { ascending: false })
-    .limit(60);
+  const query = (cols: string) =>
+    supabase
+      .from("my_todos")
+      .select(cols)
+      .eq("owner_email", email)
+      .or(`done.eq.false,done_at.gte.${since}`)
+      .order("done", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(80);
+  let { data, error } = await query("id, text, done, done_at, created_at, due_date, brand_id, source");
+  if (missingColumn(error)) ({ data, error } = await query("id, text, done, done_at, created_at"));
   if (missingTable(error)) return NextResponse.json({ ready: false, todos: [] });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ready: true, todos: (data ?? []) as Todo[] });
+  return NextResponse.json({ ready: true, todos: (data ?? []) as unknown as Todo[] });
 }
 
 export async function POST(request: Request) {

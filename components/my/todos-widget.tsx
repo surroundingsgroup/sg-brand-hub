@@ -17,7 +17,8 @@ import type { PtoApproval } from "@/lib/monday/pto";
 import { PtoDecide } from "@/components/my/pto-decide";
 import { cn } from "@/lib/utils";
 
-type Todo = { id: string; text: string; done: boolean; done_at: string | null; created_at: string };
+type Todo = { id: string; text: string; done: boolean; done_at: string | null; created_at: string; due_date?: string | null; source?: string | null };
+type NotebookTask = { id: string; text: string; done: boolean; month: string; late: boolean; client: string; url: string };
 
 const dayLabel = (iso: string, today: string): { text: string; tone: "late" | "today" | "soon" } => {
   if (iso < today) return { text: fmt(iso), tone: "late" };
@@ -57,6 +58,24 @@ export function TodosWidget({
   const [l10Done, setL10Done] = useState<Record<string, boolean>>(() => Object.fromEntries(l10.map((t) => [t.id, t.inReview])));
   const [l10Error, setL10Error] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // SocialDesk notebook items for the clients this person works.
+  const [notebook, setNotebook] = useState<NotebookTask[]>([]);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/my/notebook")
+      .then((r) => r.json())
+      .then((j: { tasks?: NotebookTask[] }) => live && setNotebook(j.tasks ?? []))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  async function toggleNotebook(n: NotebookTask) {
+    const done = !n.done;
+    setNotebook((cur) => cur.map((x) => (x.id === n.id ? { ...x, done } : x)));
+    const res = await fetch("/api/my/notebook", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client: n.client, id: n.id, done }) }).catch(() => null);
+    if (!res?.ok) setNotebook((cur) => cur.map((x) => (x.id === n.id ? { ...x, done: n.done } : x)));
+  }
 
   useEffect(() => {
     try {
@@ -145,14 +164,21 @@ export function TodosWidget({
     }
   }
 
-  const mine = [...todos].sort((a, b) => Number(a.done) - Number(b.done));
+  // Open first; dated ones by due date (late ones lead), then the rest newest first.
+  const mine = [...todos].sort(
+    (a, b) =>
+      Number(a.done) - Number(b.done) ||
+      (a.due_date ? 0 : 1) - (b.due_date ? 0 : 1) ||
+      (a.due_date && b.due_date ? a.due_date.localeCompare(b.due_date) : 0) ||
+      b.created_at.localeCompare(a.created_at)
+  );
   const l10Late = l10.filter((t) => t.due && t.due < today && !l10Done[t.id]).length;
   const mineShown = open ? mine : mine.slice(0, 3);
   const l10Shown = open ? l10 : l10.slice(0, 2);
-  const hidden = mine.length - mineShown.length + (l10.length - l10Shown.length) + Math.max(0, tasks.length - (open ? tasks.length : 2));
+  const hidden = mine.length - mineShown.length + (l10.length - l10Shown.length) + Math.max(0, tasks.length - (open ? tasks.length : 2)) + Math.max(0, notebook.length - (open ? notebook.length : 3));
   const [decided, setDecided] = useState<Record<string, boolean>>({});
   const waiting = approvals.filter((a) => !decided[a.id]).length;
-  const total = mine.filter((t) => !t.done).length + l10.filter((t) => !l10Done[t.id]).length + tasks.length + waiting;
+  const total = mine.filter((t) => !t.done).length + l10.filter((t) => !l10Done[t.id]).length + tasks.length + waiting + notebook.filter((n) => !n.done).length;
   const late = tasks.filter((t) => t.due < today).length;
   const shown = open ? tasks : tasks.slice(0, 2);
 
@@ -195,7 +221,20 @@ export function TodosWidget({
                   >
                     {t.done ? <Check className="h-3 w-3" /> : null}
                   </button>
-                  <span className={cn("min-w-0 flex-1 break-words text-[13px] leading-snug", t.done ? "text-muted-foreground line-through" : "text-foreground")}>{t.text}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("block break-words text-[13px] leading-snug", t.done ? "text-muted-foreground line-through" : "text-foreground")}>{t.text}</span>
+                    {t.due_date && !t.done
+                      ? (() => {
+                          const d = dayLabel(t.due_date, today);
+                          return (
+                            <span className={cn("mt-0.5 block text-[11px]", d.tone === "late" ? "font-medium text-red-700" : d.tone === "today" ? "font-medium text-amber-700" : "text-muted-foreground")}>
+                              {d.tone === "late" ? `was due ${d.text}` : `due ${d.text}`}
+                              {t.source === "recurring" ? " · monthly" : ""}
+                            </span>
+                          );
+                        })()
+                      : null}
+                  </span>
                   <button
                     type="button"
                     onClick={() => void remove(t)}
@@ -213,6 +252,43 @@ export function TodosWidget({
         </div>
       ) : ready === null ? (
         <div className="h-9 animate-pulse rounded-lg bg-foreground/5" aria-hidden />
+      ) : null}
+
+      {/* SocialDesk notebook: the To Produce items on your clients' notebooks */}
+      {notebook.length ? (
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              SocialDesk notebook <span className="ml-1 text-foreground/50">{notebook.filter((n) => !n.done).length}</span>
+            </span>
+          </div>
+          <ul className="space-y-0.5">
+            {(open ? notebook : notebook.slice(0, 3)).map((n) => (
+              <li key={n.id} className="flex items-start gap-2.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-secondary/50">
+                <button
+                  type="button"
+                  onClick={() => void toggleNotebook(n)}
+                  aria-label={n.done ? "Mark as not done" : "Mark as done"}
+                  className={cn(
+                    "mt-0.5 flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-md border transition-colors",
+                    n.done ? "border-emerald-600 bg-emerald-600 text-white" : "border-foreground/30 hover:border-foreground"
+                  )}
+                >
+                  {n.done ? <Check className="h-3 w-3" /> : null}
+                </button>
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block break-words text-[13px] leading-snug", n.done ? "text-muted-foreground line-through" : "text-foreground")}>{n.text}</span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+                    <a href={n.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                      {n.client}
+                    </a>
+                    <span className={cn(n.late && !n.done ? "font-medium text-red-700" : "")}>{n.late ? `from ${n.month}` : n.month}</span>
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {/* Time off waiting for you to approve: always shown in full */}

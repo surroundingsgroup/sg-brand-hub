@@ -66,7 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const had = new Set(((before.action_items_us as unknown[]) ?? []).map(task));
     const added = (body.action_items_us as unknown[]).filter((i) => task(i) && !had.has(task(i)));
     try {
-      todosAdded = await addActionItemsToTodos(params.id, added, auth.user.email ?? null);
+      todosAdded = await addActionItemsToTodos(params.id, added, auth.user.email ?? null, params.meetingId);
     } catch (e) {
       console.error("[meeting-notes.PATCH] todos failed:", (e as Error).message);
     }

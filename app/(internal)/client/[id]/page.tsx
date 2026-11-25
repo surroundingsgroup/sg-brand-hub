@@ -39,6 +39,7 @@ import { boardHoursFor, fetchBoardAllocations } from "@/lib/allocations/board-ho
 import { fetchInvoices, invoicesFor } from "@/lib/monday/invoicing";
 import { getViewer } from "@/lib/access";
 import { MeetingsTile } from "@/components/client-profile/meetings-tile";
+import { TodosTile } from "@/components/client-profile/todos-tile";
 import { InvoicingTile, overdueInvoiceCount } from "@/components/client-profile/invoicing-tile";
 import { IndustryUpdateTile } from "@/components/client-profile/industry-update-tile";
 import { ClientHero } from "@/components/client-profile/client-hero";
@@ -337,6 +338,7 @@ export default async function ClientProfilePage({
         {/* Row 1 — who, and when we talk */}
         <ContactTile brand={b} />
         <MeetingsTile brandId={b.id} pastMeetings={pastMeetings} calendar={calendarMeetings} />
+        <TodosTile brandId={b.id} brandName={b.business_name} />
 
         {/* Row 2 — work in motion: each Monday project with its brief and
             deliverables in one row (full width) */}

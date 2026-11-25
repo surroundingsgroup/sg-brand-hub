@@ -101,7 +101,7 @@ export async function POST(
   // and in the follow-up email. Best-effort: the meeting is already saved.
   let todosAdded = 0;
   try {
-    todosAdded = await addActionItemsToTodos(params.id, row.action_items_us, user.user.email ?? null);
+    todosAdded = await addActionItemsToTodos(params.id, row.action_items_us, user.user.email ?? null, data.id);
   } catch (e) {
     console.error("[meeting-notes.POST] todos failed:", (e as Error).message);
   }
