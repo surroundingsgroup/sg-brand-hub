@@ -3,7 +3,7 @@
 // for the To-dos card on My Surroundings. PATCH ticks one in SocialDesk.
 
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, currentUser } from "@/lib/supabase/server";
 import { isEmailAllowed } from "@/lib/auth/domain";
 import { personNotebook, setNotebookDone } from "@/lib/todos/client-todos";
 
@@ -11,10 +11,8 @@ export const dynamic = "force-dynamic";
 
 async function me() {
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const email = user?.email?.toLowerCase() ?? null;
+  const user = await currentUser(supabase);
+  const email = user?.email ?? null;
   return email && isEmailAllowed(email) ? email : null;
 }
 

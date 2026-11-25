@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 // Fetch Monday teams + members. Used to source the "Account Managers"
 // dropdown on the brand editor — whoever's in the team in Monday is
 // assignable as an AM in Brand Hub, zero deploys required.
@@ -41,10 +42,22 @@ const AM_TEAM_NAME = "Account Managers";
 let cache: { at: number; members: TeamMember[] } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// The AM team list: kept in Vercel's shared data cache for an hour so a fresh
+// server doesn't wait on Monday; force reads Monday now.
 export async function fetchAccountManagers(opts: { force?: boolean } = {}): Promise<TeamMember[]> {
   if (!opts.force && cache && Date.now() - cache.at < CACHE_TTL_MS) {
     return cache.members;
   }
+  if (!opts.force) {
+    const members = await cachedAccountManagers();
+    cache = { at: Date.now(), members };
+    return members;
+  }
+  return readAccountManagers();
+}
+const cachedAccountManagers = unstable_cache(() => readAccountManagers(), ["monday-account-managers"], { revalidate: 3600 });
+
+async function readAccountManagers(): Promise<TeamMember[]> {
 
   const data = await mondayFetch<{
     teams: Array<{

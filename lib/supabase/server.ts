@@ -28,3 +28,23 @@ export function createSupabaseServerClient() {
     }
   );
 }
+
+/**
+ * The signed-in person, checked without a trip to the auth server: the
+ * session token's signature is verified here against the project's public
+ * signing key (cached). Falls back to asking the auth server if that fails.
+ */
+export async function currentUser(
+  supabase: ReturnType<typeof createSupabaseServerClient>
+): Promise<{ id: string; email: string | null; name: string | null } | null> {
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    const c = data?.claims as { sub?: string; email?: string; user_metadata?: { full_name?: string } } | undefined;
+    if (!error && c?.sub) return { id: c.sub, email: c.email?.toLowerCase() ?? null, name: c.user_metadata?.full_name ?? null };
+  } catch {
+    // fall through to the auth server
+  }
+  const { data } = await supabase.auth.getUser();
+  const u = data.user;
+  return u ? { id: u.id, email: u.email?.toLowerCase() ?? null, name: (u.user_metadata?.full_name as string | undefined) ?? null } : null;
+}

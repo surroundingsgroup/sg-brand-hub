@@ -10,7 +10,7 @@
 // Any signed-in team member can work a client's list.
 
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, currentUser } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isEmailAllowed } from "@/lib/auth/domain";
 import {
@@ -31,10 +31,8 @@ export const dynamic = "force-dynamic";
 
 async function context(brandId: string) {
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const email = user?.email?.toLowerCase() ?? null;
+  const user = await currentUser(supabase);
+  const email = user?.email ?? null;
   if (!email || !isEmailAllowed(email)) return null;
   const admin = createSupabaseAdminClient();
   const { data: brand } = await admin.from("brands").select("*").eq("id", brandId).maybeSingle();

@@ -283,3 +283,17 @@ export function bucketProjects(all: HubProject[]): {
 
   return { upcoming, inFlight, recent: recent.slice(0, 5) };
 }
+
+
+// Project types on All Projects that are desk work, not a day on set: their
+// date on Monday is a due date. Everything else (the shoot packages, Standard
+// Listing, headshots...) is a shoot; "Custom / Other" counts if a task is one.
+const NOT_SHOOT = /edit request|revision request|graphic design|video assets|training|corporate marketing/i;
+export function isShootProject(p: Pick<HubProject, "projectType" | "subitems">): boolean {
+  const type = p.projectType ?? "";
+  if (NOT_SHOOT.test(type)) return false;
+  if (!type || /custom \/ other/i.test(type)) {
+    return !p.subitems?.length || p.subitems.some((s) => /shoot|session|coverage|filming/i.test(s.taskType ?? ""));
+  }
+  return true;
+}

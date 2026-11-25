@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 // Monday All Projects board mutations the Hub makes on behalf of an AM
 // clicking around in the Projects tile. Kept separate from the
 // read-only lib/monday/projects.ts so a renderer accidentally importing
@@ -85,7 +86,17 @@ export async function changeProjectStatus(itemId: string, label: string): Promis
 let statusCache: { at: number; labels: string[] } | null = null;
 const STATUS_CACHE_MS = 5 * 60 * 1000;
 
+// Status labels barely change: kept in Vercel's shared data cache for an hour,
+// so a fresh server never waits on Monday for them.
 export async function fetchProjectStatusLabels(): Promise<string[]> {
+  if (statusCache && Date.now() - statusCache.at < STATUS_CACHE_MS) return statusCache.labels;
+  const labels = await cachedStatusLabels();
+  if (labels.length) statusCache = { at: Date.now(), labels };
+  return labels;
+}
+const cachedStatusLabels = unstable_cache(() => readProjectStatusLabels(), ["monday-status-labels"], { revalidate: 3600 });
+
+async function readProjectStatusLabels(): Promise<string[]> {
   if (statusCache && Date.now() - statusCache.at < STATUS_CACHE_MS) {
     return statusCache.labels;
   }

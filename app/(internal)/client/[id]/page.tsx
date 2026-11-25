@@ -63,6 +63,54 @@ export default async function ClientProfilePage({
   params: { id: string };
 }) {
   const supabase = createSupabaseServerClient();
+  // Everything that only needs the client's id starts now, side by side, so
+  // the database round trips overlap instead of queueing.
+  const nowDate = new Date();
+  const curYear = nowDate.getFullYear();
+  const curMonth = nowDate.getMonth() + 1;
+  const nextYear = curMonth === 12 ? curYear + 1 : curYear;
+  const nextMonth = curMonth === 12 ? 1 : curMonth + 1;
+  const allocPromise = Promise.all([
+    supabase
+      .from("monthly_allocations")
+      .select("year, month, status, total_hours, submitted_at")
+      .eq("brand_id", params.id)
+      .eq("year", curYear)
+      .eq("month", curMonth)
+      .maybeSingle(),
+    supabase
+      .from("monthly_allocations")
+      .select("year, month, status, total_hours, submitted_at")
+      .eq("brand_id", params.id)
+      .eq("year", nextYear)
+      .eq("month", nextMonth)
+      .maybeSingle(),
+    supabase
+      .from("monthly_allocations")
+      .select("year, month, status, total_hours")
+      .eq("brand_id", params.id)
+      .eq("status", "submitted")
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(4),
+  ]);
+  const meetingRowsPromise = Promise.resolve(
+    supabase
+      .from("meeting_notes")
+      .select("id, meeting_type, meeting_title, meeting_date, summary, analyzed_at, created_at")
+      .eq("brand_id", params.id)
+      .order("meeting_date", { ascending: false })
+      .limit(8)
+  );
+  const poolBrandsPromise = Promise.resolve(
+    supabase.from("brands").select("id, business_name").neq("id", params.id).order("business_name")
+  );
+  const amOptionsPromise = fetchAccountManagers().catch(() => []);
+  // Hours on the Monday Allocation board, for the rate math on the Allocation card.
+  const boardAllocationsPromise = fetchBoardAllocations();
+  // Invoices for this client, from the Monday Invoicing board.
+  const invoicesPromise = fetchInvoices();
+  const viewerPromise = getViewer(supabase);
   const [{ data: brand }, { data: logos }] = await Promise.all([
     supabase.from("brands").select("*").eq("id", params.id).single(),
     supabase
@@ -76,13 +124,7 @@ export default async function ClientProfilePage({
   const logoCount = (logos ?? []).length;
 
   // AM options for the hero's inline picker — the Monday "Account Managers"
-  // team (cached ~5 min). Never let a Monday hiccup break the client page.
-  let amOptions: string[] = [];
-  try {
-    amOptions = (await fetchAccountManagers()).map((m) => m.name).filter(Boolean);
-  } catch {
-    amOptions = [];
-  }
+  // team (cached). Never let a Monday hiccup break the client page.
   // Activity log is still written to (Monday project edits, status
   // changes, etc.) — just no longer rendered as a primary tile. If we
   // bring back a "History" view, read brand_activity_log here.
@@ -92,14 +134,9 @@ export default async function ClientProfilePage({
   // Tool briefs) in parallel, once. Each tile receives its slice as
   // props; the Activity feed aggregates across everything.
   const typedScope = (b as unknown as { scope?: BrandScope | null }).scope ?? null;
-  // Hours on the Monday Allocation board, for the rate math on the Allocation card.
-  const boardAllocationsPromise = fetchBoardAllocations();
   // Lifecycle meetings for the onboarding checklist (calendar, ~a year ahead);
   // started now so it runs alongside everything else.
   const lifecyclePromise = fetchClientLifecycle(b.business_name);
-  // Invoices for this client, from the Monday Invoicing board.
-  const invoicesPromise = fetchInvoices();
-  const viewerPromise = getViewer(supabase);
   const [projectsData, pulseData, briefsData, statusLabels, clientBoardData, recordsFrom, calendarMeetings] = await Promise.all([
     fetchProjectsForClient(b.business_name, { withSubitems: true }),
     // SocialDesk may know this client by another name (kept on the scope).
@@ -120,44 +157,15 @@ export default async function ClientProfilePage({
   // Allocation Setup subitems need the board's items to exist first; do
   // this after the parallel fetch above so we only hit Monday's API when
   // we actually have a board to query.
-  const allocationSetup = await fetchAllocationSetup(clientBoardData);
+  const allocationSetupPromise = fetchAllocationSetup(clientBoardData);
 
   // Hub-native allocation snapshot for current + upcoming month + last
-  // 3 submitted months for the history strip. We fetch all four in one
-  // round-trip and split client-side.
-  const nowDate = new Date();
-  const curYear = nowDate.getFullYear();
-  const curMonth = nowDate.getMonth() + 1;
-  const nextYear = curMonth === 12 ? curYear + 1 : curYear;
-  const nextMonth = curMonth === 12 ? 1 : curMonth + 1;
-  const [{ data: currentAlloc }, { data: nextAlloc }, { data: allocHistoryRows }] =
-    await Promise.all([
-      supabase
-        .from("monthly_allocations")
-        .select("year, month, status, total_hours, submitted_at")
-        .eq("brand_id", params.id)
-        .eq("year", curYear)
-        .eq("month", curMonth)
-        .maybeSingle(),
-      supabase
-        .from("monthly_allocations")
-        .select("year, month, status, total_hours, submitted_at")
-        .eq("brand_id", params.id)
-        .eq("year", nextYear)
-        .eq("month", nextMonth)
-        .maybeSingle(),
-      supabase
-        .from("monthly_allocations")
-        .select("year, month, status, total_hours")
-        .eq("brand_id", params.id)
-        .eq("status", "submitted")
-        .order("year", { ascending: false })
-        .order("month", { ascending: false })
-        .limit(4),
-    ]);
+  // 3 submitted months for the history strip (started at the top).
+  const [{ data: currentAlloc }, { data: nextAlloc }, { data: allocHistoryRows }] = await allocPromise;
   const boardAllocations = await boardAllocationsPromise;
   const allInvoices = await invoicesPromise;
   const viewer = await viewerPromise;
+  const amOptions: string[] = (await amOptionsPromise).map((m) => m.name).filter(Boolean);
   const clientInvoices = invoicesFor(allInvoices.rows, b as unknown as { business_name: string; monday_board_id?: string | number | null });
   const allocationCurrent = currentAlloc as {
     year: number;
@@ -188,12 +196,7 @@ export default async function ClientProfilePage({
 
   // Past meetings for this brand — rendered as a history strip under
   // the Meetings tile's "Start notes" rows. Keeps the most recent 8.
-  const { data: meetingRows } = await supabase
-    .from("meeting_notes")
-    .select("id, meeting_type, meeting_title, meeting_date, summary, analyzed_at, created_at")
-    .eq("brand_id", params.id)
-    .order("meeting_date", { ascending: false })
-    .limit(8);
+  const { data: meetingRows } = await meetingRowsPromise;
   const pastMeetings = (meetingRows ?? []) as Array<{
     id: string;
     meeting_type: string;
@@ -216,7 +219,7 @@ export default async function ClientProfilePage({
     ? `${process.env.SOCIALDESK_URL ?? "https://socialdesk-lac.vercel.app"}/#/client/${pulseData.client_id}`
     : null;
   const lifecycle = await lifecyclePromise;
-  const onboarding = await loadOnboardingChecklist({
+  const [onboarding, allocationSetup] = await Promise.all([loadOnboardingChecklist({
     lifecycle,
     supabase,
     brand: b,
@@ -231,7 +234,7 @@ export default async function ClientProfilePage({
       const ch = (scope as unknown as { channels?: unknown } | null)?.channels;
       return Array.isArray(ch) ? ch.length : ch && typeof ch === "object" ? Object.keys(ch).length : 0;
     })(),
-  });
+  }), allocationSetupPromise]);
   const brandAgeDays = (Date.now() - new Date((b as unknown as { created_at?: string }).created_at ?? 0).getTime()) / 86_400_000;
   // New clients (first 120 days) get the checklist up top while anything is
   // left (and for 30 days regardless). Older clients keep it folded at the
@@ -283,11 +286,7 @@ export default async function ClientProfilePage({
   const datedProjects = [...datedById.values()];
 
   // Other clients, for the scope form's "Shared shoot pool with" picker.
-  const { data: poolBrands } = await supabase
-    .from("brands")
-    .select("id, business_name")
-    .neq("id", b.id)
-    .order("business_name");
+  const { data: poolBrands } = await poolBrandsPromise;
   const poolOptions = (poolBrands ?? []).map((x) => ({
     id: x.id as string,
     name: x.business_name as string,

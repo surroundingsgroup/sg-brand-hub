@@ -323,14 +323,28 @@ export function hasSocialdesk(names: string[], client: string): boolean {
  * schedule for). Run when their My Surroundings loads, so the monthly ones
  * show up without anyone opening the client page.
  */
+// Checked at most every 20 minutes per person on a server, so My Surroundings
+// doesn't pay for it on every load.
+const recurringCheckedAt = new Map<string, number>();
+
 export async function ensureRecurringForPerson(email: string): Promise<void> {
+  const key = email.toLowerCase();
+  if (Date.now() - (recurringCheckedAt.get(key) ?? 0) < 20 * 60 * 1000) return;
+  recurringCheckedAt.set(key, Date.now());
   const admin = createSupabaseAdminClient();
   const team = await teamDirectory();
-  const me = team.find((p) => p.email === email.toLowerCase());
+  const me = team.find((p) => p.email === key);
   if (!me) return;
-  const { data } = await admin.from("brands").select("*");
+  // Only this person's clients: AM by name (either column) or owner of the schedule.
+  const quoted = `"${me.name.replace(/"/g, "")}"`;
+  const [{ data }, names] = await Promise.all([
+    admin
+      .from("brands")
+      .select("id, business_name, account_manager, am, submitter_name, status, todo_schedule")
+      .or(`account_manager.ilike.${quoted},am.ilike.${quoted},todo_schedule->>owner_email.eq.${key}`),
+    socialdeskClients(),
+  ]);
   const brands = ((data ?? []) as Record<string, unknown>[]).filter((b) => b.status !== "archived");
-  const names = await socialdeskClients();
   const today = easternToday();
   await Promise.all(
     brands.map(async (b) => {

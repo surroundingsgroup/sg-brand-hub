@@ -4,7 +4,7 @@
 // touch rows under their email.
 
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, currentUser } from "@/lib/supabase/server";
 import { isEmailAllowed } from "@/lib/auth/domain";
 import { ensureRecurringForPerson, missingColumn } from "@/lib/todos/client-todos";
 
@@ -18,10 +18,8 @@ const missingTable = (e: { code?: string; message?: string } | null) =>
 
 async function who() {
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const email = user?.email?.toLowerCase() ?? null;
+  const user = await currentUser(supabase);
+  const email = user?.email ?? null;
   return { supabase, email: email && isEmailAllowed(email) ? email : null };
 }
 

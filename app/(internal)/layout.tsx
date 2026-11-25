@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, currentUser } from "@/lib/supabase/server";
 import { isEmailAllowed } from "@/lib/auth/domain";
 import { TopNav } from "@/components/shell/top-nav";
 import { ProfileNudge } from "@/components/shell/profile-nudge";
@@ -8,23 +8,23 @@ import { getViewer } from "@/lib/access";
 
 export default async function InternalLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await currentUser(supabase);
 
   if (!user) redirect("/login");
-  if (!isEmailAllowed(user.email)) redirect("/login?error=domain");
+  if (!isEmailAllowed(user.email ?? undefined)) redirect("/login?error=domain");
 
-  // What's missing on the signed-in user's own profile? Drives the
-  // top-of-page nudge banner that dismisses per day.
+  // What's missing on the signed-in user's own profile (drives the nudge
+  // banner), and whether they see everything: read side by side.
   const email = user.email ?? null;
+  const [profile, viewer] = await Promise.all([
+    email
+      ? supabase.from("team_profiles").select("phone, birthday, start_date, title").eq("email", email).maybeSingle()
+      : Promise.resolve({ data: null }),
+    getViewer(supabase),
+  ]);
+  const me = profile.data as { phone?: string | null; birthday?: string | null; start_date?: string | null; title?: string | null } | null;
   const needs: string[] = [];
   if (email) {
-    const { data: me } = await supabase
-      .from("team_profiles")
-      .select("phone, birthday, start_date, title")
-      .eq("email", email.toLowerCase())
-      .maybeSingle();
     if (!me?.phone) needs.push("phone");
     if (!me?.birthday) needs.push("birthday");
     if (!me?.start_date) needs.push("start date");
@@ -32,7 +32,7 @@ export default async function InternalLayout({ children }: { children: React.Rea
   }
 
   // Account health (and what sits under it) only shows for admins.
-  const admin = (await getViewer(supabase)).everyone;
+  const admin = viewer.everyone;
 
   return (
     <div className="min-h-screen bg-canvas">

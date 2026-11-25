@@ -26,9 +26,21 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify the session token locally (its signature against the project's
+  // public key) instead of a round trip to the auth server on every request.
+  // Refreshes an expired session the same way getUser did.
+  let user: { id: string; email: string | undefined } | null = null;
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    const c = data?.claims as { sub?: string; email?: string } | undefined;
+    if (!error && c?.sub) user = { id: c.sub, email: c.email };
+  } catch {
+    user = null;
+  }
+  if (!user) {
+    const { data } = await supabase.auth.getUser();
+    user = data.user ? { id: data.user.id, email: data.user.email } : null;
+  }
 
   return { response, user };
 }

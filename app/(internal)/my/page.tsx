@@ -23,7 +23,7 @@ import {
   Users,
   Video,
 } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, currentUser } from "@/lib/supabase/server";
 import { PageContainer } from "@/components/shell/page-container";
 import { Tile } from "@/components/client-profile/tile";
 import { NewDealWidget } from "@/components/my/new-deal-widget";
@@ -37,7 +37,7 @@ import { fetchMyL10Todos } from "@/lib/monday/l10";
 import { fetchMyPtoApprovals } from "@/lib/monday/pto";
 import { findAmByEmail } from "@/lib/monday/teams";
 import { findMondayPerson } from "@/lib/monday/deal-intake";
-import { bucketProjects, fetchProjectsForClient } from "@/lib/monday/projects";
+import { bucketProjects, fetchProjectsForClient, isShootProject } from "@/lib/monday/projects";
 import { fetchShoutouts } from "@/lib/monday/shoutouts";
 import { loadAccountHealth, type AccountRow } from "@/lib/scope/accounts";
 import type { Level } from "@/lib/scope/summary";
@@ -50,9 +50,7 @@ const TZ = "America/New_York";
 
 export default async function MyHubPage() {
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await currentUser(supabase);
   const email = user?.email ?? null;
 
   // Who this is, as their name appears on client records. Some people sign in
@@ -278,12 +276,6 @@ function statusFor(row: AccountRow): string {
   return light?.label ?? "On track";
 }
 
-async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = [];
-  for (let i = 0; i < items.length; i += size) out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
-  return out;
-}
-
 // "Client | Project" on Monday: drop the client, it is shown on its own line.
 const projectTitle = (name: string, client: string) => {
   const [head, ...rest] = name.split(/\s+\|\s+/);
@@ -306,6 +298,9 @@ async function OnMyAccountsWidget({ amName }: { amName: string | null }) {
       (b) => b.status === "approved" && b.engagement_type !== "inactive" && (b.account_manager ?? "").trim().toLowerCase() === mine
     );
   }
+
+  // Every client's Monday projects, all at once, while contract health is read.
+  const projectsPromise = Promise.all(roster.map((b) => fetchProjectsForClient(b.business_name).catch(() => null)));
 
   // Flags: contract health in red or yellow, and scope drafts waiting for a yes.
   const flags: Flag[] = [];
@@ -331,10 +326,12 @@ async function OnMyAccountsWidget({ amName }: { amName: string | null }) {
   const horizon = new Date(new Date(`${today}T12:00:00Z`).getTime() + 14 * 86400000).toISOString().slice(0, 10);
   const shoots: Shoot[] = [];
   const briefs: BriefDue[] = [];
-  await inBatches(roster, 6, async (b) => {
-    const res = await fetchProjectsForClient(b.business_name).catch(() => null);
+  const allProjects = await projectsPromise;
+  roster.forEach((b, i) => {
+    const res = allProjects[i];
     const { upcoming, inFlight } = bucketProjects(res?.projects ?? []);
     for (const p of upcoming) {
+      if (!isShootProject(p)) continue; // edit and design requests carry a due date, not a shoot
       const day = (p.shootDateIso ?? "").slice(0, 10);
       if (day >= today && day <= horizon) shoots.push({ key: p.id, clientId: b.id, client: b.business_name, title: projectTitle(p.name, b.business_name), when: p.shootDateIso as string });
     }

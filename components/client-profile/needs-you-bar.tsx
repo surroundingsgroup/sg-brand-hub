@@ -13,6 +13,7 @@
 //
 // Nothing to flag? → "All clear" state, which is intentionally quiet.
 
+import { isShootProject } from "@/lib/monday/projects";
 import Link from "next/link";
 import { CalendarCheck, Instagram, Sparkles, AlarmClock, CheckCircle2, Receipt, Users } from "lucide-react";
 import { UpdateInviteButton } from "./update-invite-button";
@@ -57,19 +58,8 @@ export function NeedsYouBar({
 
   // Shoots in the next 7 days. Only real shoots: an edit or design request
   // carries a date on Monday too (its due date), but nobody is going on set.
-  // Project types on All Projects that are desk work, not a day on set.
-  const NOT_SHOOT = /edit request|revision request|graphic design|video assets|training|corporate marketing/i;
-  const isShoot = (p: (typeof projects)[number]) => {
-    const type = p.projectType ?? "";
-    if (NOT_SHOOT.test(type)) return false;
-    // No type, or "Custom / Other": a shoot only if a task on it is one.
-    if (!type || /custom \/ other/i.test(type)) {
-      return !p.subitems?.length || p.subitems.some((s) => /shoot|session|coverage|filming/i.test(s.taskType ?? ""));
-    }
-    return true;
-  };
   const upcomingThisWeek = projects.filter((p) => {
-    if (!p.shootDateIso || !isShoot(p)) return false;
+    if (!p.shootDateIso || !isShootProject(p)) return false;
     const t = new Date(p.shootDateIso).getTime();
     return !isNaN(t) && t >= now && t <= weekOut;
   });

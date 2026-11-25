@@ -7,7 +7,7 @@
 // There are no roles in the database yet. Until there are, the people who see
 // everything are named here.
 
-import type { createSupabaseServerClient } from "@/lib/supabase/server";
+import { currentUser, type createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const SEES_EVERYTHING = ["Billy Pavlock", "Justin Tarr"];
 
@@ -21,8 +21,8 @@ export type Viewer = {
 };
 
 export async function getViewer(supabase: ReturnType<typeof createSupabaseServerClient>): Promise<Viewer> {
-  const [{ data: user }, { data: profiles }] = await Promise.all([supabase.auth.getUser(), supabase.from("team_profiles").select("email, name, manager_email")]);
-  const email = user.user?.email?.toLowerCase() ?? null;
+  const [user, { data: profiles }] = await Promise.all([currentUser(supabase), supabase.from("team_profiles").select("email, name, manager_email")]);
+  const email = user?.email ?? null;
   const rows = (profiles ?? []) as { email: string; name: string | null; manager_email: string | null }[];
   const me = email ? rows.find((p) => p.email.toLowerCase() === email) : undefined;
   const name = me?.name?.trim() || null;
