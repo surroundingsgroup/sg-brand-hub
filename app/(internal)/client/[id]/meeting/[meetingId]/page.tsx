@@ -8,9 +8,11 @@ import { EmailPreview } from "@/components/meetings/email-preview";
 import { OpenInGmail } from "@/components/meetings/open-in-gmail";
 import { RecapHero } from "@/components/meetings/recap-hero";
 import { RawNotesButton } from "@/components/meetings/raw-notes-button";
-import { ActionTool, type ActionToolItem } from "@/components/meetings/action-tool";
+import { type ActionToolItem } from "@/components/meetings/action-tool";
+import { SavedActionList } from "@/components/meetings/saved-action-list";
+import { clientTodoStates, todoPrefix } from "@/lib/meetings/todos";
 import Link from "next/link";
-import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar, PenLine, UserRound, CalendarClock } from "lucide-react";
+import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar, PenLine } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -26,13 +28,9 @@ const MEETING_LABEL: Record<string, string> = {
 type ActionItem = ActionToolItem & {
   owner?: string | null;
   due?: string | null;
+  done?: boolean;
 };
 
-// "2026-11-25" -> "Wed, Nov 25"; loose wording stays as written.
-function dueLabel(due: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return due;
-  return new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
 
 function fmtDate(iso: string): string {
   const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
@@ -88,6 +86,16 @@ export default async function SavedMeetingPage({
 
   const pocEmail = brand.submitter_email as string | null;
 
+  // Our items follow their To-dos: one checked off in My Surroundings shows
+  // as done here too (and one reopened there shows open).
+  const clientName = brand.business_name as string;
+  const todos = await clientTodoStates(clientName).catch(() => []);
+  const ours = (m.action_items_us ?? []).map((it) => {
+    const prefix = todoPrefix(clientName, it.task ?? "");
+    const rows = todos.filter((t) => t.text.startsWith(prefix));
+    return rows.length ? { ...it, done: rows.every((t) => t.done) } : it;
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b border-border/70 bg-panel">
@@ -141,11 +149,14 @@ export default async function SavedMeetingPage({
               title={`Our next steps${(m.action_items_us ?? []).length ? ` · ${(m.action_items_us ?? []).length}` : ""}`}
               icon={<ListChecks className="h-3.5 w-3.5" />}
             >
-              <ActionList
-                items={m.action_items_us ?? []}
+              <SavedActionList
+                items={ours}
+                side="us"
+                brandId={params.id}
+                meetingId={m.id}
                 emptyLabel="Nothing we promised."
                 numbered
-                tool={{ brandId: params.id, brandName: brand.business_name as string, pocEmail }}
+                tool={{ brandName: clientName, pocEmail }}
               />
             </Card>
           </div>
@@ -156,8 +167,11 @@ export default async function SavedMeetingPage({
               title={`On ${brand.submitter_name ? possessive(String(brand.submitter_name).split(" ")[0]) : "the client's"} side`}
               icon={<UsersIcon className="h-3.5 w-3.5" />}
             >
-              <ActionList
+              <SavedActionList
                 items={m.action_items_them ?? []}
+                side="them"
+                brandId={params.id}
+                meetingId={m.id}
                 emptyLabel="Nothing owed from them."
               />
             </Card>
@@ -221,61 +235,4 @@ function Card({
 // "Bertram Yachts'" not "Bertram Yachts's".
 function possessive(name: string): string {
   return /s$/i.test(name.trim()) ? `${name.trim()}'` : `${name.trim()}'s`;
-}
-
-function ActionList({
-  items,
-  emptyLabel,
-  numbered = false,
-  tool,
-}: {
-  items: ActionItem[];
-  emptyLabel: string;
-  numbered?: boolean;
-  /** Show each item's next-step tool (ours). */
-  tool?: { brandId: string; brandName: string; pocEmail: string | null };
-}) {
-  if (!items || items.length === 0) {
-    return <p className="text-[12px] italic text-muted-foreground">{emptyLabel}</p>;
-  }
-  const now = new Date().toISOString();
-  return (
-    <ul className="space-y-2.5">
-      {items.map((it, i) => {
-        // Proposed times that have already passed are no use any more.
-        const item: ActionItem = it.slots ? { ...it, slots: it.slots.filter((s) => s.start > now) } : it;
-        return (
-          <li key={i} className="flex items-start gap-2.5 border-b border-border/40 pb-2.5 last:border-b-0 last:pb-0">
-            {numbered ? (
-              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-foreground text-[10.5px] font-semibold text-background">
-                {i + 1}
-              </div>
-            ) : (
-              <div className="pt-0.5 text-muted-foreground">•</div>
-            )}
-            <div className="flex-1 space-y-1.5">
-              <div className={`leading-snug text-foreground ${numbered ? "text-[13.5px] font-medium" : "text-[13px]"}`}>{it.task}</div>
-              {it.owner || it.due ? (
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                  {it.owner ? (
-                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-foreground/80">
-                      <UserRound className="h-3 w-3" />
-                      {it.owner}
-                    </span>
-                  ) : null}
-                  {it.due ? (
-                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 text-foreground/80">
-                      <CalendarClock className="h-3 w-3" />
-                      {dueLabel(it.due)}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-              {tool ? <ActionTool item={item} brandId={tool.brandId} brandName={tool.brandName} pocEmail={tool.pocEmail} /> : null}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
 }

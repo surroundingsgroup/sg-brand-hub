@@ -52,3 +52,35 @@ export async function addActionItemsToTodos(brandId: string, items: unknown[], s
   if (error) throw new Error(error.message);
   return fresh.length;
 }
+
+// ── Keeping a meeting's action items and their To-dos in step ──────────────
+// A To-do made from a meeting item reads "<Client>: <task> (<due>)", so the
+// "<Client>: <task>" start finds it again.
+export function todoPrefix(client: string, task: string): string {
+  return `${client}: ${task.trim()}`.slice(0, 280);
+}
+
+const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/** Mark the To-dos for this item done (or open again). */
+export async function setItemTodosDone(client: string, task: string, done: boolean): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  await admin
+    .from("my_todos")
+    .update({ done, done_at: done ? new Date().toISOString() : null })
+    .like("text", `${likeEscape(todoPrefix(client, task))}%`)
+    .eq("done", !done);
+}
+
+/** Remove the still-open To-dos for an item that was cleared from the meeting. */
+export async function deleteItemTodos(client: string, task: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  await admin.from("my_todos").delete().like("text", `${likeEscape(todoPrefix(client, task))}%`).eq("done", false);
+}
+
+/** Every To-do for this client's meeting items: text -> done. */
+export async function clientTodoStates(client: string): Promise<{ text: string; done: boolean }[]> {
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("my_todos").select("text, done").like("text", `${likeEscape(client)}: %`).limit(500);
+  return ((data ?? []) as { text: string; done: boolean }[]) ?? [];
+}
