@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { EmailPreview } from "@/components/meetings/email-preview";
 import { OpenInGmail } from "@/components/meetings/open-in-gmail";
 import { RecapHero } from "@/components/meetings/recap-hero";
+import { RawNotesButton } from "@/components/meetings/raw-notes-button";
 import { ActionTool, type ActionToolItem } from "@/components/meetings/action-tool";
 import Link from "next/link";
 import { ChevronLeft, Mail, ListChecks, Users as UsersIcon, Calendar, PenLine, UserRound, CalendarClock } from "lucide-react";
@@ -90,7 +91,7 @@ export default async function SavedMeetingPage({
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b border-border/70 bg-panel">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-3">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-3">
           <Link
             href={`/client/${params.id}`}
             className="inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
@@ -104,7 +105,7 @@ export default async function SavedMeetingPage({
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+      <div className="mx-auto w-full max-w-6xl px-6 py-8">
         <div className="mb-8">
           <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {title}
@@ -117,6 +118,8 @@ export default async function SavedMeetingPage({
               <Calendar className="h-3.5 w-3.5" />
               {fmtDate(m.meeting_date)}
             </span>
+            <div className="flex items-center gap-2">
+            <RawNotesButton notes={m.raw_notes} />
             <Link
               href={`/client/${params.id}/meeting/${m.id}/edit`}
               className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-semibold text-background shadow-sm transition-opacity hover:opacity-90"
@@ -124,25 +127,11 @@ export default async function SavedMeetingPage({
               <PenLine className="h-3.5 w-3.5" />
               Edit notes
             </Link>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <section className="rounded-xl border border-border/70 bg-panel p-5">
-            <div className="mb-3 border-b border-border/60 pb-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Raw notes
-            </div>
-            {m.raw_notes ? (
-              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">
-                {m.raw_notes}
-              </p>
-            ) : (
-              <p className="text-[12px] italic text-muted-foreground">
-                No raw notes saved.
-              </p>
-            )}
-          </section>
-
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
             {m.summary || m.next_meeting_focus ? (
               <RecapHero summary={m.summary ?? ""} focus={m.next_meeting_focus ?? ""} clientName={brand.business_name as string} />
@@ -159,6 +148,9 @@ export default async function SavedMeetingPage({
                 tool={{ brandId: params.id, brandName: brand.business_name as string, pocEmail }}
               />
             </Card>
+          </div>
+
+          <div className="flex flex-col gap-4">
 
             <Card
               title={`On ${brand.submitter_name ? possessive(String(brand.submitter_name).split(" ")[0]) : "the client's"} side`}
